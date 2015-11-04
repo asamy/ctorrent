@@ -51,7 +51,7 @@ inline uint32_t readBE32(const uint8_t *addr)
 
 inline uint64_t readBE64(const uint8_t *addr)
 {
-	return (uint64_t)readBE32(addr + 4) | (uint64_t)readBE32(addr) << 32;
+	return (uint64_t)readBE32(addr + 4) | readBE32(addr) << 32;
 }
 
 inline void writeBE16(uint8_t *addr, uint16_t value)
@@ -70,8 +70,14 @@ inline void writeBE32(uint8_t *addr, uint32_t value)
 
 inline void writeBE64(uint8_t *addr, uint64_t value)
 {
-	writeBE32(addr, value >> 32);
-	writeBE32(addr + 4, (uint32_t)value);
+	addr[0] = (uint8_t)(value >> 56);
+	addr[1] = (uint8_t)(value >> 48);
+	addr[2] = (uint8_t)(value >> 40);
+	addr[3] = (uint8_t)(value >> 32);
+	addr[4] = (uint8_t)(value >> 24);
+	addr[5] = (uint8_t)(value >> 16);
+	addr[6] = (uint8_t)(value >> 8);
+	addr[7] = (uint8_t)(value);
 }
 #endif
 

@@ -259,7 +259,8 @@ Torrent::DownloadError Torrent::download(int port)
 
 	while (m_completedPieces != piecesNeeded) {
 		if (m_peers.size() < 10 && std::chrono::system_clock::now() >= m_timeToNextRequest) {
-			std::clog << "Requesting more peers" << std::endl;
+			std::clog << m_name << ": Requesting more peers; downloaded " << bytesToHumanReadable(m_downloadedBytes, true) << "/"
+				<< bytesToHumanReadable(totalSize(), true) << std::endl;
 			std::ostringstream os;
 			os << m_peers.size() * 4;
 
@@ -268,7 +269,6 @@ Torrent::DownloadError Torrent::download(int port)
 			if (!queryTracker(dict, port))
 				return DownloadError::TrackerQueryFailure;
 
-			//disconnectPeers();
 			connectToPeers(dict["peers"]);
 		}
 
