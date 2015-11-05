@@ -44,12 +44,12 @@ public:
 	inline void encode(const Dictionary& dict) { return writeDictionary(dict); }
 
 	template <typename T>
-	inline T cast(const boost::any &value)
+	static inline T cast(const boost::any &value)
 	{
 		return boost::any_cast<T>(value);
 	}
 	template <typename T>
-	inline T unsafe_cast(const boost::any &value)
+	static inline T unsafe_cast(const boost::any &value)
 	{
 		return *boost::unsafe_any_cast<T>(&value);
 	}
