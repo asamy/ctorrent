@@ -149,9 +149,8 @@ std::string urlencode(const std::string &value)
 	return escaped.str();
 }
 
-bool validatePath(const std::string& base, const std::string& path)
+bool validatePath(const std::string &base, const std::string &path)
 {
-#if 0
 	char absolutePath[PATH_MAX + 1];
 #ifdef _WIN32
 	if (!_fullpath(absolutePath, path.c_str(), PATH_MAX))
@@ -164,11 +163,11 @@ bool validatePath(const std::string& base, const std::string& path)
 		throw std::runtime_error("path is too short");
 	else if (base != std::string(absolutePath).substr(0, base.length()))
 		throw std::runtime_error("path mismatch");
-#endif
+
 	return true;
 }
 
-bool nodeExists(const std::string& node)
+bool nodeExists(const std::string &node)
 {
 #ifdef _WIN32
 	return PathFileExists(node.c_str());
