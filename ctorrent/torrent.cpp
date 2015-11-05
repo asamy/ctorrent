@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 Ahmed Samy  <f.fallen45@gmail.com>
+ * Copyright (c) 2014, 2015 Ahmed Samy  <f.fallen45@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -34,6 +34,8 @@ Torrent::Torrent()
 	: m_completedPieces(0),
 	  m_uploadedBytes(0),
 	  m_downloadedBytes(0),
+	  m_pieceLength(0),
+	  m_totalSize(0),
 	  m_hashMisses(0),
 	  m_pieceMisses(0)
 {
@@ -58,7 +60,8 @@ bool Torrent::open(const std::string &fileName, const std::string &downloadDir)
 	}
 
 	m_mainTracker = bencode.unsafe_cast<std::string>(dict["announce"]);
-	m_comment = bencode.unsafe_cast<std::string>(dict["comment"]);
+	if (dict.count("comment"))
+		m_comment = bencode.unsafe_cast<std::string>(dict["comment"]);
 	if (dict.count("announce-list") > 0)
 		m_trackers = bencode.unsafe_cast<VectorType>(dict["announce-list"]);
 
@@ -106,60 +109,32 @@ bool Torrent::open(const std::string &fileName, const std::string &downloadDir)
 		MKDIR(dirName);
 		CHDIR(dirName);
 
-		base = getcwd();	/* += "/" + dirName  */
+		base = getcwd();	/* += PATH_SEP + dirName  */
+		const boost::any &any = info["files"];
 		int64_t begin = 0;
-
-		const Dictionary files = bencode.unsafe_cast<Dictionary>(info["files"]);
 		size_t index = 0;
-		for (const auto& pair : files) {
-			Dictionary v = bencode.unsafe_cast<Dictionary>(pair.second);
-			VectorType pathList = bencode.unsafe_cast<VectorType>(v["path"]);
-			std::string path;
-
-			for (auto it = pathList.begin();; ++it) {
-				const std::string &s = bencode.unsafe_cast<std::string>(*it);
-				if (it == pathList.end() - 1) {
-					path += s + PATH_SEP;
-					break;
-				}
-
-				path += s + PATH_SEP;
-				if (!nodeExists(path))
-					MKDIR(path);
-			}
-
-			int64_t length = bencode.unsafe_cast<int64_t>(v["length"]);
-			File file = {
-				.path = path,
-				.fp = nullptr,
-				.begin = begin,
-				.length = length
-			};
-			if (!nodeExists(path)) {
-				/* Open for writing and create  */
-				file.fp = fopen(path.c_str(), "wb");
-				if (!file.fp) {
-					std::cerr << m_name << ": unable to create " << path << std::endl;
+		if (any.type() == typeid(Dictionary)) {
+			const Dictionary &files = bencode.unsafe_cast<Dictionary>(any);
+			for (const auto &pair : files) {
+				Dictionary v = bencode.unsafe_cast<Dictionary>(pair.second);
+				VectorType pathList = bencode.unsafe_cast<VectorType>(v["path"]);
+	
+				if (!parseFile(std::move(v), std::move(pathList), index, begin))
 					return false;
-				}
-			} else {
-				/* Open for both writing and reading  */
-				file.fp = fopen(path.c_str(), "rb+");
-				if (!file.fp) {
-					std::cerr << m_name << ": unable to open " << path << std::endl;
-					return false;
-				}
-
-				findCompletedPieces(&file, index);
-				std::clog << m_name << ": " << path << ": Completed pieces: " << m_completedPieces << "/" << m_pieces.size() << std::endl;
 			}
+		} else if (any.type() == typeid(VectorType)) {
+			const VectorType &files = bencode.unsafe_cast<VectorType>(any);
+			for (const auto &f : files) {
+				Dictionary v = bencode.unsafe_cast<Dictionary>(f);
+				VectorType pathList = bencode.unsafe_cast<VectorType>(v["path"]);
 
-
-			m_files.push_back(file);
-			m_totalSize += length;
-			begin += length;
-			++index;
-		}
+				if (!parseFile(std::move(v), std::move(pathList), index, begin))
+					return false;
+			}
+		} else {
+			// This can happen?
+			std::cerr << m_name << ": Invalid info files type" << std::endl;
+		}	
 
 		chdir("..");
 	} else {
@@ -203,6 +178,55 @@ bool Torrent::open(const std::string &fileName, const std::string &downloadDir)
 	return true;
 }
 
+bool Torrent::parseFile(Dictionary &&v, VectorType &&pathList, size_t &index, int64_t &begin)
+{
+	std::string path;
+
+	for (auto it = pathList.begin();; ++it) {
+		const std::string &s = Bencode::unsafe_cast<std::string>(*it);
+		if (it == pathList.end() - 1) {
+			path += s;
+			break;
+		}
+
+		path += s + PATH_SEP;
+		if (!nodeExists(path))
+			MKDIR(path);
+	}
+
+	const int64_t length = Bencode::unsafe_cast<int64_t>(v["length"]);
+	File file = {
+		.path = path,
+		.fp = nullptr,
+		.begin = begin,
+		.length = length
+	};
+	if (!nodeExists(path)) {
+		/* Open for writing and create  */
+		file.fp = fopen(path.c_str(), "wb");
+		if (!file.fp) {
+			std::cerr << m_name << ": unable to create " << path << std::endl;
+			return false;
+		}
+	} else {
+		/* Open for both writing and reading  */
+		file.fp = fopen(path.c_str(), "rb+");
+		if (!file.fp) {
+			std::cerr << m_name << ": unable to open " << path << std::endl;
+			return false;
+		}
+
+		findCompletedPieces(&file, index);
+		std::clog << m_name << ": " << path << ": Completed pieces: " << m_completedPieces << "/" << m_pieces.size() << std::endl;
+	}
+
+	m_files.push_back(file);
+	m_totalSize += length;
+	begin += length;
+	++index;
+	return true;
+}
+
 bool Torrent::checkPieceHash(const uint8_t *data, size_t size, uint32_t index)
 {
 	if (index >= m_pieces.size())
@@ -242,202 +266,101 @@ void Torrent::findCompletedPieces(const File *f, size_t index)
 #endif
 }
 
+TrackerQuery Torrent::makeTrackerQuery(TrackerEvent event) const
+{
+	TrackerQuery q;
+
+	q.event = event;
+	q.uploaded = 0;
+	q.downloaded = 0;
+
+	for (size_t i = 0; i < m_pieces.size(); ++i)
+		if (m_pieces[i].done)
+			q.downloaded += pieceSize(i);
+	q.remaining = m_totalSize - q.downloaded;
+	return q;
+}
+
 Torrent::DownloadError Torrent::download(int port)
 {
-	int64_t piecesNeeded = (int64_t)m_pieces.size();
+	size_t piecesNeeded = m_pieces.size();
 	if (m_completedPieces == piecesNeeded)
 		return DownloadError::AlreadyDownloaded;
 
-	// Following (const char *) casts are to shut GCC 4.8.1 on Windows (MinGW32) up.
-	Dictionary dict;
-	dict["event"] = (const char *)"started";
-	if (!queryTracker(dict, port))
+	if (!queryTrackers(makeTrackerQuery(TrackerEvent::Started)))
 		return DownloadError::TrackerQueryFailure;
 
-	connectToPeers(dict["peers"]);
-	dict.clear();
-
 	while (m_completedPieces != piecesNeeded) {
-		if (m_peers.size() < 10 && std::chrono::system_clock::now() >= m_timeToNextRequest) {
-			std::clog << m_name << ": Requesting more peers; downloaded " << bytesToHumanReadable(m_downloadedBytes, true) << "/"
-				<< bytesToHumanReadable(totalSize(), true) << std::endl;
-			std::ostringstream os;
-			os << m_peers.size() * 4;
-
-			dict.clear();
-			dict["numwant"] = os.str().c_str();
-			if (!queryTracker(dict, port))
-				return DownloadError::TrackerQueryFailure;
-
-			connectToPeers(dict["peers"]);
-		}
-
+		for (const TrackerPtr &tracker : m_activeTrackers)
+			if (tracker->timeUp())
+				tracker->query(makeTrackerQuery(TrackerEvent::None));
 		sleep(1);
 	}
 
-	disconnectPeers();
 	for (const auto &f : m_files)
 		fclose(f.fp);
 	m_files.clear();
 
-	dict["event"] = (const char *)"stopped";
+	TrackerEvent event;
 	if (m_completedPieces == piecesNeeded)
-		dict["completed"] = (const char *)"1";
+		event = TrackerEvent::Completed;
+	else
+		event = TrackerEvent::Stopped;
 
-	queryTracker(dict, port);
-	return (m_completedPieces == piecesNeeded) ? DownloadError::Completed : DownloadError::NetworkError;
+	for (const TrackerPtr &tracker : m_activeTrackers)
+		tracker->query(makeTrackerQuery(event));
+
+	disconnectPeers();
+	return event == TrackerEvent::Completed ? DownloadError::Completed : DownloadError::NetworkError;
 }
 
-bool Torrent::queryTracker(Dictionary &request, int portnr)
+bool Torrent::queryTrackers(const TrackerQuery &query)
 {
-	std::string req = "";
-	for (const auto& pair : request)
-		req += pair.first + "=" + boost::any_cast<const char *>(pair.second) + "&";
-	request.clear();
+	if (queryTracker(m_mainTracker, query))
+		return true;
 
-	UrlData url  = parseUrl(m_mainTracker);
+	if (m_trackers.empty()) {
+		std::cerr << m_name << ": queryTracker(): This torrent does not provide multiple trackers" << std::endl;
+		return false;
+	}
+
+	bool success = false;
+	for (const boost::any &s : m_trackers) {
+		if (s.type() == typeid(VectorType)) {
+			const VectorType &vType = *boost::unsafe_any_cast<VectorType>(&s);
+			for (const boost::any &announce : vType)
+				if ((success = queryTracker(Bencode::unsafe_cast<std::string>(&announce), query)));
+				//	break;
+		}
+		else if (s.type() == typeid(std::string)
+			&& (success = queryTracker(Bencode::unsafe_cast<std::string>(&s), query)));
+	}
+
+	if (!success) {
+		std::cerr << m_name << ": queryTrackers(): Tried to connect to " << m_trackers.size() << " tracker(s) but none seem to respond" << std::endl;
+		return false;
+	}
+
+	return true;
+}
+
+bool Torrent::queryTracker(const std::string &furl, const TrackerQuery &q)
+{
+	UrlData url = parseUrl(furl);
 	std::string host = URL_HOSTNAME(url);
 	if (host.empty()) {
-		std::cerr << m_name << ": queryTracker(): failed to parse announce url: " << m_mainTracker << " bailing out..." << std::endl;
+		std::cerr << m_name << ": queryTracker(): failed to parse announce url: " << furl << std::endl;
 		return false;
 	}
 
 	std::string port = URL_SERVNAME(url);
-	std::string protocol;
-	if (!port.empty())
-		protocol = port;
-	else
-		protocol = URL_PROTOCOL(url);
+	std::string protocol = URL_PROTOCOL(url);
 
-	/// TODO: Some trackers require a UDP connection.
-	asio::ip::tcp::socket socket(g_service);
-	if (!connectTo(host, protocol, socket)) {
-		if (m_trackers.empty()) {
-			std::cerr << m_name << ": queryTracker(): This Torrent did not provide multiple trackers, bailing out..." << std::endl;
-			return false;
-		}
-
-		bool success = false;
-		for (const boost::any &s : m_trackers) {
-			/* From random torrent from thepiratebay.se:
-				d8:announce40:http://tracker.thepiratebay.org/announce13:announce-listll40:http://tracker.thepiratebay.org/announceel35:udp://tracker.openbittorrent.com:80el25:udp://tracker-ccc.de:6969el29:udp://tracker.publicbt.com:80ee
-				It basically ended the list after each tracker, so I am not quite sure if this right, the announce-list is supposed to be like so:
-					[ "alt_tracker1", "alt_tracker2", ... ]
-				Not:
-					[ [ "alt_tracker1" ], [ "alt_tracker2" ], ... ]
-
-				I may not be right, I think this is how qBitTorrent generates it, since later in that torrent:
-					created by20:qBittorrent v3.1.9.213
-			*/
-			if (s.type() == typeid(VectorType)) {
-				const VectorType &vType = *boost::unsafe_any_cast<VectorType>(&s);
-				for (const boost::any &announce : vType) {
-					url = parseUrl(*boost::unsafe_any_cast<std::string>(&announce));
-					host = URL_HOSTNAME(url);
-					if (host.empty())	/* Semantic error?  */
-						continue;
-
-					port = URL_SERVNAME(url);
-					if (!port.empty())
-						protocol = port;
-					else
-						protocol = URL_PROTOCOL(url);
-
-					std::cerr << m_name << ": queryTracker(): Trying: " << host << ":" << protocol << std::endl;
-					if ((success = connectTo(host, protocol, socket)))
-						break;
-				}
-			} else if (s.type() == typeid(std::string)) {
-				url = parseUrl(*boost::unsafe_any_cast<std::string>(&s));
-				host = URL_HOSTNAME(url);
-				port = URL_SERVNAME(url);
-				if (!port.empty())
-					protocol = port;
-				else
-					protocol = URL_PROTOCOL(url);
-
-				std::cerr << m_name << ": queryTracker(): Trying: " << host << ":" << protocol << std::endl;
-				if ((success = connectTo(host, protocol, socket)))
-					break;
-			}
-		}
-
-		if (!success) {
-			std::cerr << m_name << ": queryTracker(): Tried to connect to " << m_trackers.size() << " tracker(s) but none of them seem to respond" << std::endl;
-			return false;
-		}
-	}
-
-	char infoHash[20];
-	memcpy(infoHash, &m_handshake[28], 20);
-	int64_t downloaded = downloadedBytes();
-
-	asio::streambuf params;
-	std::ostream buf(&params);
-	buf << "GET /announce?" << req << "info_hash=" << urlencode(std::string(infoHash, 20)) << "&port=" << portnr << "&compact=1&key=1337T0RRENT"
-		<< "&peer_id=" << urlencode(std::string((const char *)peerId(), 20)) << "&downloaded=" << downloaded << "&uploaded=" << m_uploadedBytes
-		<< "&left=" << m_totalSize - downloaded << " HTTP/1.0\r\n"
-		<< "Host: " << host << "\r\n"
-		<< "\r\n";
-	asio::write(socket, params);
-
-	asio::streambuf response;
-	try {
-		asio::read_until(socket, response, "\r\n");
-	} catch (const std::exception &e) {
-		std::cerr << m_name << ": queryTracker(): Unable to read from " << host << ":" << protocol << " (" << e.what() << ")" << std::endl;
+	TrackerPtr tracker(new Tracker(this, host, port, protocol));
+	if (!tracker->query(q))
 		return false;
-	}
 
-	std::istream rbuf(&response);
-	std::string httpVersion;
-	rbuf >> httpVersion;
-
-	if (httpVersion.substr(0, 5) != "HTTP/") {
-		std::cerr << m_name << ": queryTracker(): Internal error: Tracker send an invalid HTTP version response" << std::endl;
-		return false;
-	}
-
-	int status;
-	rbuf >> status;
-	if (status != 200) {
-		std::cerr << m_name << ": queryTracker(): Tracker failed to process our request: " << status << std::endl;
-		return false;
-	}
-
-	try {
-		asio::read_until(socket, response, "\r\n\r\n");
-	} catch (const std::exception &e) {
-		std::cerr << m_name << ": queryTracker(): Unable to read from " << host << ":" << protocol << " (" << e.what() << ")" << std::endl;
-		return false;
-	}
-
-	// Seek to start of body
-	std::string header;
-	while (std::getline(rbuf, header) && header != "\r");
-	if (!rbuf) {
-		std::cerr << m_name << ": queryTracker(): Unable to get to tracker response body." << std::endl;
-		return false;
-	}
-
-	std::ostringstream os;
-	os << &response;
-	std::string buffer = os.str();
-
-	Bencode bencode;
-	request = bencode.decode(buffer.c_str(), buffer.length());
-	if (request.empty()) {
-		std::cerr << m_name << ": queryTracker(): Unable to decode tracker response body" << std::endl;
-		return false;
-	}
-
-	if (request.count("failure reason") != 0) {
-		std::cerr << m_name << ": queryTracker(): Tracker responded: " << bencode.unsafe_cast<std::string>(request["failure reason"]) << std::endl;
-		return false;
-	}
-
-	m_timeToNextRequest = std::chrono::system_clock::now()
-				+ std::chrono::milliseconds(bencode.unsafe_cast<int64_t>(request["interval"]));
+	m_activeTrackers.push_back(tracker);
 	return true;
 }
 
@@ -455,9 +378,7 @@ void Torrent::connectToPeers(const boost::any &_peers)
 			auto peer = std::make_shared<Peer>(this);
 			peer->connect(ip2str(isLittleEndian() ? readLE32(iport) : readBE32(iport)), std::to_string(readBE16(iport + 4)));
 		}
-	} else if (_peers.type() == typeid(Dictionary)) {
-		/* If we got here it means the tracker does not support compact mode,
-		 * this is bad for us; bandwidth waste and slower than the method above.  */
+	} else if (_peers.type() == typeid(Dictionary)) {	// no compat
 		Dictionary peers = *boost::unsafe_any_cast<Dictionary>(&_peers);
 		assert(!peers.empty());
 
@@ -467,6 +388,11 @@ void Torrent::connectToPeers(const boost::any &_peers)
 			std::string peerId = boost::any_cast<std::string>(peerInfo["peer id"]);
 			std::string ip = boost::any_cast<std::string>(peerInfo["ip"]);
 			int64_t port = boost::any_cast<int64_t>(peerInfo["port"]);
+
+			auto it = std::find_if(m_peers.begin(), m_peers.end(),
+					[ip] (const PeerPtr &peer) { return peer->getIP() == ip; });
+			if (it != m_peers.end())
+				continue;
 
 			// Asynchronously connect to that peer, and do not add it to our
 			// active peers list unless a connection was established successfully.
@@ -491,9 +417,7 @@ void Torrent::addPeer(const PeerPtr &peer)
 void Torrent::removePeer(const PeerPtr &peer, const std::string &errmsg)
 {
 	auto it = std::find(m_peers.begin(), m_peers.end(), peer);
-	if (it == m_peers.end())
-		std::cerr << m_name << ": removePeer(): failed to find peer " << peer << std::endl;
-	else
+	if (it != m_peers.end())
 		m_peers.erase(it);
 
 	std::clog << m_name << ": " << peer->getIP() << ": " << errmsg << std::endl;
@@ -512,6 +436,7 @@ void Torrent::requestPiece(const PeerPtr &peer)
 	size_t index = 0;
 	int32_t priority = std::numeric_limits<int32_t>::max();
 
+#if 0
 	std::vector<size_t> peerPieces = peer->getPieces();
 	for (size_t i = 0; i < peerPieces.size(); ++i) {
 		size_t piece = peerPieces[i];
@@ -532,11 +457,38 @@ void Torrent::requestPiece(const PeerPtr &peer)
 			index = piece;
 		}
 	}
+#else
+	for (size_t i = 0; i < m_pieces.size(); ++i) {
+		Piece *p = &m_pieces[i];
+		if (p->done || !peer->hasPiece(i))
+			continue;
+
+		if (!p->priority) {
+			p->priority = 1;
+			return peer->sendPieceRequest(i);
+		}
+
+		if (priority > p->priority) {
+			priority = p->priority;
+			index = i;
+		}
+	}
+#endif
 
 	if (priority != std::numeric_limits<int32_t>::max()) {
 		++m_pieces[index].priority;
 		peer->sendPieceRequest(index);
 	}	
+}
+
+void Torrent::handleTrackerError(const TrackerPtr &tracker, const std::string &error)
+{
+	std::cerr << m_name << ": tracker request failed: " << error << std::endl;
+}
+
+void Torrent::handlePeerDebug(const PeerPtr &peer, const std::string &msg)
+{
+	std::clog << m_name << ": " << peer->getIP() << " " << msg << std::endl;
 }
 
 void Torrent::handlePieceCompleted(const PeerPtr &peer, uint32_t index, const DataBuffer<uint8_t> &pieceData)
@@ -615,48 +567,5 @@ int64_t Torrent::pieceSize(size_t pieceIndex) const
 	}
 
 	return m_pieceLength;
-}
-
-inline int64_t Torrent::downloadedBytes() const
-{
-	int64_t downloaded = 0;
-	for (size_t i = 0; i < m_pieces.size(); ++i)
-		if (m_pieces[i].done)
-			downloaded += pieceSize(i);
-	return downloaded;
-}
-
-bool Torrent::connectTo(
-	const std::string &host, const std::string &service,
-	asio::ip::tcp::socket &socket
-)
-{
-	asio::ip::tcp::resolver resolver(g_service);
-	asio::ip::tcp::resolver::query query(host, service);
-	boost::system::error_code error;
-
-	asio::ip::tcp::resolver::iterator endpoint = resolver.resolve(query, error);
-	asio::ip::tcp::resolver::iterator end;
-	if (error) {
-		std::cerr << m_name << ": queryTracker(): DNS Lookup failure: "
-				<< host << "(service name: " << service << "): "
-				<< "(error message: " << error.message() << ")"
-				<< std::endl;
-		return false;
-	}
-
-	do {
-		socket.close();
-		socket.connect(*endpoint++, error);
-	} while (error && endpoint != end);
-	if (error) {
-		std::cerr << m_name << ": queryTracker(): Unable to connect to tracker at "
-				<< host << " (service name: " << query.service_name() << "): "
-				<< "(error message: " << error.message() << ")"
-				<< std::endl;
-		return false;
-	}
-
-	return true;
 }
 

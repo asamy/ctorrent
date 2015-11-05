@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 Ahmed Samy  <f.fallen45@gmail.com>
+ * Copyright (c) 2014, 2015 Ahmed Samy  <f.fallen45@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -31,6 +31,7 @@
 class Torrent;
 class Peer : public std::enable_shared_from_this<Peer>
 {
+	struct Piece;
 	enum State : uint8_t {
 		PS_AmChoked = 1 << 0,			// We choked this peer (aka we're not giving him anymore pieces)
 		PS_AmInterested = 1 << 1,		// We're interested in this peer's pieces
@@ -57,6 +58,7 @@ public:
 
 	inline void setId(const std::string &id) { m_peerId = id; }
 	inline std::string getIP() const { return m_conn->getIPString(); }
+	inline uint32_t ip() const { return m_conn->getIP(); }
 	void disconnect();
 	void connect(const std::string &ip, const std::string &port);
 
@@ -69,6 +71,8 @@ protected:
 	void sendPieceRequest(uint32_t index);
 	void sendRequest(uint32_t index, uint32_t begin, uint32_t size);
 	void sendInterested();
+	void sendCancelRequest(Piece *p);
+	void sendCancel(uint32_t index, uint32_t begin, uint32_t size);
 
 	void requestPiece(size_t pieceIndex);
 	inline std::vector<size_t> getPieces() const { return m_pieces; }
@@ -85,6 +89,8 @@ private:
 	struct PieceBlock {
 		size_t size;
 		uint8_t *data;
+
+		PieceBlock() { data = nullptr; size = 0; }
 		~PieceBlock() { delete []data; }
 	};
 
