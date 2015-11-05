@@ -113,11 +113,12 @@ int main(int argc, char *argv[])
 	int total = argc - optind;
 	int completed = 0;
 	int errors = 0;
+	int started = 0;
 
 	Torrent torrents[total];
 	std::thread threads[total];
-	for (int i = 0; optind < argc; ++i) {
-		const char *file = argv[optind++];
+	for (int i = 0; optind < argc; ++i, ++optind) {
+		const char *file = argv[optind];
 		Torrent *t = &torrents[i];
 
 		if (!t->open(file, dldir)) {
@@ -130,6 +131,7 @@ int main(int argc, char *argv[])
 		if (nodownload)
 			continue;
 
+		++started;
 		threads[i] = std::thread([t, &startport, &completed, &errors]() {
 			auto error = t->download(startport++);
 			switch (error) {
@@ -157,9 +159,14 @@ int main(int argc, char *argv[])
 		threads[i].detach();
 	}
 
-	if (!nodownload) {
+	if (!nodownload && started > 0) {
 		int last = 0;
 		while (completed != total) {
+			if (errors == total) {
+				std::cerr << "All torrents failed to download" << std::endl;
+				break;
+			}
+
 			if (last == completed) {
 				sleep(5);
 				continue;
