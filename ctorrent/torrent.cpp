@@ -283,13 +283,13 @@ TrackerQuery Torrent::makeTrackerQuery(TrackerEvent event) const
 	return q;
 }
 
-Torrent::DownloadError Torrent::download(int port)
+Torrent::DownloadError Torrent::download(uint16_t port)
 {
 	size_t piecesNeeded = m_pieces.size();
 	if (m_completedPieces == piecesNeeded)
 		return DownloadError::AlreadyDownloaded;
 
-	if (!queryTrackers(makeTrackerQuery(TrackerEvent::Started)))
+	if (!queryTrackers(makeTrackerQuery(TrackerEvent::Started), port))
 		return DownloadError::TrackerQueryFailure;
 
 	while (m_completedPieces != piecesNeeded) {
@@ -315,9 +315,9 @@ Torrent::DownloadError Torrent::download(int port)
 	return event == TrackerEvent::Completed ? DownloadError::Completed : DownloadError::NetworkError;
 }
 
-bool Torrent::queryTrackers(const TrackerQuery &query)
+bool Torrent::queryTrackers(const TrackerQuery &query, uint16_t port)
 {
-	bool success = queryTracker(m_mainTracker, query);
+	bool success = queryTracker(m_mainTracker, query, port);
 	if (m_trackers.empty()) {
 		if (!success)
 			std::cerr << m_name << ": queryTracker(): This torrent does not provide multiple trackers" << std::endl;
@@ -329,10 +329,10 @@ bool Torrent::queryTrackers(const TrackerQuery &query)
 		if (s.type() == typeid(VectorType)) {
 			const VectorType &vType = *boost::unsafe_any_cast<VectorType>(&s);
 			for (const boost::any &announce : vType)
-				success = queryTracker(Bencode::unsafe_cast<std::string>(&announce), query);
+				success = queryTracker(Bencode::unsafe_cast<std::string>(&announce), query, port);
 		}
 		else if (s.type() == typeid(std::string))
-			success = queryTracker(Bencode::unsafe_cast<std::string>(&s), query);
+			success = queryTracker(Bencode::unsafe_cast<std::string>(&s), query, port);
 		else
 			std::cerr << m_name << ": warning: unkown tracker type: " << s.type().name() << std::endl;
 	}
@@ -340,7 +340,7 @@ bool Torrent::queryTrackers(const TrackerQuery &query)
 	return success;
 }
 
-bool Torrent::queryTracker(const std::string &furl, const TrackerQuery &q)
+bool Torrent::queryTracker(const std::string &furl, const TrackerQuery &q, uint16_t tport)
 {
 	UrlData url = parseUrl(furl);
 	std::string host = URL_HOSTNAME(url);
@@ -352,7 +352,7 @@ bool Torrent::queryTracker(const std::string &furl, const TrackerQuery &q)
 	std::string port = URL_SERVNAME(url);
 	std::string protocol = URL_PROTOCOL(url);
 
-	TrackerPtr tracker(new Tracker(this, host, port, protocol));
+	TrackerPtr tracker(new Tracker(this, host, port, protocol, tport));
 	if (!tracker->query(q))
 		return false;
 
@@ -367,10 +367,17 @@ void Torrent::rawConnectPeers(const uint8_t *peers, size_t size)
 	// 6 bytes each (first 4 is ip address, last 2 port) all in big endian notation
 	for (size_t i = 0; i < size; i += 6) {
 		const uint8_t *iport = peers + i;
+		uint32_t ip =isLittleEndian() ? readLE32(iport) : readBE32(iport);
+
+		auto it = std::find_if(m_peers.begin(), m_peers.end(),
+				[ip] (const PeerPtr &peer) { return peer->ip() == ip; });
+		if (it != m_peers.end())
+			continue;
+
 		// Asynchronously connect to that peer, and do not add it to our
 		// active peers list unless a connection was established successfully.
 		auto peer = std::make_shared<Peer>(this);
-		peer->connect(ip2str(isLittleEndian() ? readLE32(iport) : readBE32(iport)), std::to_string(readBE16(iport + 4)));
+		peer->connect(ip2str(ip), std::to_string(readBE16(iport + 4)));
 	}
 }
 

@@ -30,13 +30,16 @@ public:
 	OutputMessage(ByteOrder order, size_t fixedSize = 0);
 	~OutputMessage();
 
+	void clear() { m_buffer.clear(); m_pos = 0; }
 	void addByte(uint8_t byte);
+	void addBytes(const uint8_t *bytes, size_t size);
 	void addU16(uint16_t val);
 	void addU32(uint32_t val);
 	void addU64(uint64_t val);
-	void addString(const std::string& str);
+	void addString(const std::string &str);
 
-	const uint8_t *data() const { return &m_buffer[0]; }
+	const uint8_t *data() const { return &m_buffer[m_pos]; }
+	const uint8_t *data(size_t p) const { return &m_buffer[p]; }
 	size_t size() const { return m_pos; }
 
 	inline OutputMessage &operator<<(const uint8_t &b)

@@ -38,6 +38,13 @@ OutputMessage::~OutputMessage()
 
 }
 
+void OutputMessage::addBytes(const uint8_t *bytes, size_t size)
+{
+	m_buffer.reserve(size);
+	memcpy(&m_buffer[m_pos], &bytes[0], size);
+	m_pos += size;
+}
+
 void OutputMessage::addByte(uint8_t byte)
 {
 	m_buffer[m_pos++] = byte;

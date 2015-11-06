@@ -25,13 +25,13 @@
 #include <boost/any.hpp>
 
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <vector>
 
 #include <util/serializer.h>
 #include <util/databuffer.h>
 
-typedef std::unordered_map<std::string, boost::any> Dictionary;
+typedef std::map<std::string, boost::any> Dictionary;
 typedef std::vector<boost::any> VectorType;
 
 class Bencode {

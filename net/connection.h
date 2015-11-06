@@ -57,7 +57,7 @@ public:
 	void close(bool warn = true);	/// Pass false in ErrorCallback otherwise possible infinite recursion
 	bool isConnected() const { return m_socket.is_open(); }
 
-	inline void write(const OutputMessage &o) { write(o.data(), o.size()); }
+	inline void write(const OutputMessage &o) { write(o.data(0), o.size()); }
 	inline void write(const std::string &str) { return write((const uint8_t *)str.c_str(), str.length()); }
 	void write(const uint8_t *data, size_t bytes);
 	void read_partial(size_t bytes, const ReadCallback &rc);

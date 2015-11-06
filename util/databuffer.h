@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <string.h>
 
 template<class T>
 class DataBuffer
@@ -22,12 +23,19 @@ public:
 	}
 
 	inline size_t size() const { return m_size; }
+	inline size_t cap() const { return m_capacity; }
 	inline T *data() const { return m_buffer; }
 
 	inline const T &operator[](size_t i) const { return m_buffer[i]; }
 	inline T &operator[](size_t i) { return m_buffer[i]; }
 	DataBuffer<T> &operator=(T *data) { if (m_allocated) delete []m_buffer; m_buffer = data; m_allocated = false; return *this; }
 	inline void setSize(size_t size) { m_size = size; }
+
+	inline void clear(void)
+	{
+		memset(&m_buffer[0], 0x00, m_capacity);
+		m_size = 0;
+	}
 
 	inline void reserve(size_t n)
 	{

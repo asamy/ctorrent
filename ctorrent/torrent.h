@@ -59,7 +59,7 @@ public:
 	~Torrent();
 
 	bool open(const std::string& fileName, const std::string &downloadDir);
-	DownloadError download(int port);
+	DownloadError download(uint16_t port);
 
 	inline size_t activePeers() const { return m_peers.size(); }
 	inline int64_t totalSize() const { return m_totalSize; }
@@ -69,8 +69,8 @@ public:
 
 protected:
 	bool checkPieceHash(const uint8_t *data, size_t size, uint32_t index);
-	bool queryTrackers(const TrackerQuery &r);
-	bool queryTracker(const std::string &url, const TrackerQuery &r);
+	bool queryTrackers(const TrackerQuery &r, uint16_t port);
+	bool queryTracker(const std::string &url, const TrackerQuery &r, uint16_t port);
 	bool parseFile(Dictionary &&v, VectorType &&pathList, size_t &index, int64_t &begin);
 	void findCompletedPieces(const struct File *f, size_t index);
 	void rawConnectPeers(const uint8_t *peers, size_t size);
