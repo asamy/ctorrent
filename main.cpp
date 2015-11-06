@@ -36,12 +36,12 @@ static void print_help(const char *p)
 {
 	std::clog << "Usage: " << p << " <options...> <torrent...>" << std::endl;
 	std::clog << "Mandatory arguments to long options are mandatory for short options too." << std::endl;
-	std::clog << "\t\t--version (-v), --help (-h) 	do not take any argument" << std::endl;
+	std::clog << "\t\t--version (-v), --help (-h) 	print version and help respectively then exit" << std::endl;
 	std::clog << "\t\t--nodownload (-n)		Just check pieces completed, torrent size, etc." << std::endl;
 	std::clog << "\t\t--piecesize (-s)		Specify piece size in KB, this will be rounded to the nearest power of two.  Default is 16 KB" << std::endl;
 	std::clog << "\t\t--port (-p)			Not yet fully implemented." << std::endl;
 	std::clog << "\t\t--dldir (-d)			Specify downloads directory." << std::endl;
-	std::clog << "\t\t--torrents (-t)		Specify torrent file(s)." << std::endl;
+	std::clog << "\t\t--torrents (-t) 		Specify torrent file(s)." << std::endl;
 	std::clog << "Example: " << p << " --nodownload --torrents a.torrent b.torrent c.torrent" << std::endl;
 }
 
@@ -53,7 +53,7 @@ int main(int argc, char *argv[])
 	po::options_description opts;
 	opts.add_options()
 		("version,v", "print version string")
-		("help,h", "print help this help message")
+		("help,h", "print this help message")
 		("port,p", po::value(&startport), "specify start port; not currently used")
 		("nodownload,n", "do not download anything, just print info about torrents")
 		("piecesize,s", po::value(&maxRequestSize), "specify piece block size")
@@ -70,14 +70,19 @@ int main(int argc, char *argv[])
 		po::store(po::parse_command_line(argc, argv, opts), vm);
 		po::notify(vm);
 	} catch (const std::exception &e) {
-		std::cerr << argv[0] << ": error: " << e.what() << std::endl;
+		std::cerr << argv[0] << ": error parsing command line arguments: " << e.what() << std::endl;
 		print_help(argv[0]);
 		return 1;
 	}
 
 	if (vm.count("help")) {
 		print_help(argv[0]);
-		return 1;
+		return 0;
+	}
+
+	if (vm.count("version")) {
+		std::clog << "CTorrent version 1.0" << std::endl;
+		return 0;
 	}
 
 	bool nodownload = false;
