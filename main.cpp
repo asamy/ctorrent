@@ -102,13 +102,9 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	std::thread thread;
-	if (!nodownload) {
+	if (!nodownload)
 		std::clog << "Using " << dldir << " as downloads directory and " 
 			<< bytesToHumanReadable(maxRequestSize, true) << " piece block size" << std::endl;
-		thread = std::thread([] () { while (true) Connection::poll(); });
-		thread.detach();
-	}
 
 	int total = argc - optind;
 	int completed = 0;
@@ -167,10 +163,9 @@ int main(int argc, char *argv[])
 				break;
 			}
 
-			if (last == completed) {
-				sleep(5);
+			Connection::poll();
+			if (last == completed)
 				continue;
-			}
 
 			std::clog << "Completed " << completed << "/" << total - errors << " (" << errors << " errnoeous torrents)" << std::endl;
 			last = completed;
