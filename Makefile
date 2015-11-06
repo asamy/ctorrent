@@ -7,9 +7,9 @@ CXXFLAGS = -std=c++11 $(BTYPE) -fopenmp -Wall -Wextra -Wno-sign-compare -Wno-unu
 
 LIBS = -fopenmp -lcrypto
 ifeq ($(OS),Windows_NT)
-LIBS += -lboost_system-mt -lws2_32 -lshlwapi
+LIBS += -lboost_system-mt -lboost_program_options-mt-lws2_32 -lshlwapi
 else
-LIBS += -lboost_system -lpthread
+LIBS += -lboost_system -lboost_program_options -lpthread
 endif
 
 OBJ_DIR = obj

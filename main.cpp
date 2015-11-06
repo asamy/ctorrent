@@ -27,8 +27,10 @@
 #include <functional>
 #include <iostream>
 
+#include <boost/program_options.hpp>
 #include <stdlib.h>
-#include <getopt.h>
+
+namespace po = boost::program_options;
 
 static void print_help(const char *p)
 {
@@ -39,65 +41,50 @@ static void print_help(const char *p)
 	std::clog << "\t\t--piecesize (-s)		Specify piece size in KB, this will be rounded to the nearest power of two.  Default is 16 KB" << std::endl;
 	std::clog << "\t\t--port (-p)			Not yet fully implemented." << std::endl;
 	std::clog << "\t\t--dldir (-d)			Specify downloads directory." << std::endl;
-	std::clog << "Example: " << p << " --nodownload a.torrent b.torrent c.torrent" << std::endl;
+	std::clog << "\t\t--torrents (-t)		Specify torrent file(s)." << std::endl;
+	std::clog << "Example: " << p << " --nodownload --torrents a.torrent b.torrent c.torrent" << std::endl;
 }
 
 int main(int argc, char *argv[])
 {
-	static const struct option opts[] = {
-		{ "version",    no_argument,	   0, 'v' },
-		{ "help", 	no_argument,	   0, 'h' },
-		{ "port",	required_argument, 0, 'p' },
-		{ "nodownload", no_argument, 	   0, 'n' },
-		{ "piecesize",  required_argument, 0, 's' },
-		{ "dldir",      required_argument, 0, 'd' },
-		{ 0, 		0,		   0, 0   }
-	};
+	int startport = 6881;
+	std::string dldir = "Torrents";
+
+	po::options_description opts;
+	opts.add_options()
+		("version,v", "print version string")
+		("help,h", "print help this help message")
+		("port,p", po::value(&startport), "specify start port; not currently used")
+		("nodownload,n", "do not download anything, just print info about torrents")
+		("piecesize,s", po::value(&maxRequestSize), "specify piece block size")
+		("dldir,d", po::value(&dldir), "specify downloads directory")
+		("torrents,t", po::value<std::vector<std::string>>(), "specify torrent file(s)");
 
 	if (argc == 1) {
 		print_help(argv[0]);
 		return 1;
 	}
 
-	char c;
-	int optidx = 0;
-	bool nodownload = false;
-	int startport = 6881;
-	std::string dldir = "Torrents";
-	while ((c = getopt_long(argc, argv, "nvp:hs:d:", opts, &optidx)) != -1) {
-		switch (c) {
-		case 'n':
-			nodownload = true;
-			break;
-		case 's':
-			maxRequestSize = 1 << (32 - __builtin_clz(atoi(optarg) - 1));
-			break;
-		case 'p':
-			startport = atoi(optarg);
-			break;
-		case 'd':
-			dldir = optarg;
-			break;
-		case '?':
-			return 1;
-		case 'v':
-			std::clog << "CTorrent v1.0" << std::endl;
-			/* fallthru  */
-		case 'h':
-			print_help(argv[0]);
-			return 0;
-		default:
-			if (optopt == 'c')
-				std::cerr << "Option -" << optopt << " requires an argument." << std::endl;
-			else if (isprint(optopt))
-				std::cerr << "Unknown option -" << optopt << "." << std::endl;
-			else
-				std::cerr << "Unknown option character '\\x" << std::hex << optopt << "'." << std::endl;
-			return 1;
-		}
+	po::variables_map vm;
+	try {
+		po::store(po::parse_command_line(argc, argv, opts), vm);
+		po::notify(vm);
+	} catch (const std::exception &e) {
+		std::cerr << argv[0] << ": error: " << e.what() << std::endl;
+		print_help(argv[0]);
+		return 1;
 	}
 
-	if (optind >= argc) {
+	if (vm.count("help")) {
+		print_help(argv[0]);
+		return 1;
+	}
+
+	bool nodownload = false;
+	if (vm.count("nodownload"))
+		nodownload = true;
+
+	if (!vm.count("torrents")) {
 		std::clog << argv[0] << ": Please specify torrent file(s) after arguments." << std::endl;
 		return 1;
 	}
@@ -106,15 +93,16 @@ int main(int argc, char *argv[])
 		std::clog << "Using " << dldir << " as downloads directory and " 
 			<< bytesToHumanReadable(maxRequestSize, true) << " piece block size" << std::endl;
 
-	int total = argc - optind;
+	std::vector<std::string> files = vm["torrents"].as<std::vector<std::string>>();
+	int total = files.size();
 	int completed = 0;
 	int errors = 0;
 	int started = 0;
 
 	Torrent torrents[total];
 	std::thread threads[total];
-	for (int i = 0; optind < argc; ++i, ++optind) {
-		const char *file = argv[optind];
+	for (int i = 0; i < files.size(); ++i) {
+		std::string file = files[i];
 		Torrent *t = &torrents[i];
 
 		if (!t->open(file, dldir)) {
