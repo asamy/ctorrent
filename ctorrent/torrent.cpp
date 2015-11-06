@@ -48,7 +48,6 @@ Torrent::~Torrent()
 		fclose(f.fp);
 	m_files.clear();
 	m_activeTrackers.clear();
-	disconnectPeers();
 }
 
 bool Torrent::open(const std::string &fileName, const std::string &downloadDir)
@@ -329,12 +328,15 @@ bool Torrent::queryTrackers(const TrackerQuery &query, uint16_t port)
 		if (s.type() == typeid(VectorType)) {
 			const VectorType &vType = *boost::unsafe_any_cast<VectorType>(&s);
 			for (const boost::any &announce : vType)
-				success = queryTracker(Bencode::unsafe_cast<std::string>(&announce), query, port);
-		}
-		else if (s.type() == typeid(std::string))
-			success = queryTracker(Bencode::unsafe_cast<std::string>(&s), query, port);
-		else
+				if (!success)
+					success = queryTracker(Bencode::unsafe_cast<std::string>(&announce), query, port);
+		} else if (s.type() == typeid(std::string)) {
+			if (!success)
+				success = queryTracker(Bencode::unsafe_cast<std::string>(&s), query, port);
+		} else {
+			// This can actually happen?
 			std::cerr << m_name << ": warning: unkown tracker type: " << s.type().name() << std::endl;
+		}
 	}
 
 	return success;

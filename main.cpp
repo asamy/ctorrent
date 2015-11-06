@@ -137,8 +137,8 @@ int main(int argc, char *argv[])
 				break;
 			}
 
-			std::clog << "Downloaded: " << bytesToHumanReadable(t->downloadedBytes(), true) << std::endl;
-			std::clog << "Uploaded:   " << bytesToHumanReadable(t->uploadedBytes(),   true) << std::endl;
+			std::clog << t->name() << ": Downloaded: " << bytesToHumanReadable(t->downloadedBytes(), true) << std::endl;
+			std::clog << t->name() << ": Uploaded:   " << bytesToHumanReadable(t->uploadedBytes(),   true) << std::endl;
 		});
 		threads[i].detach();
 	}
