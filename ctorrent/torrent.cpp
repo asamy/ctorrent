@@ -34,10 +34,10 @@ Torrent::Torrent()
 	: m_completedPieces(0),
 	  m_uploadedBytes(0),
 	  m_downloadedBytes(0),
-	  m_pieceLength(0),
-	  m_totalSize(0),
+	  m_wastedBytes(0),
 	  m_hashMisses(0),
-	  m_pieceMisses(0)
+	  m_pieceLength(0),
+	  m_totalSize(0)
 {
 
 }
@@ -46,6 +46,8 @@ Torrent::~Torrent()
 {
 	for (auto f : m_files)
 		fclose(f.fp);
+	m_files.clear();
+	m_activeTrackers.clear();
 	disconnectPeers();
 }
 
@@ -294,7 +296,7 @@ Torrent::DownloadError Torrent::download(int port)
 		for (const TrackerPtr &tracker : m_activeTrackers)
 			if (tracker->timeUp())
 				tracker->query(makeTrackerQuery(TrackerEvent::None));
-		sleep(1);
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 	}
 
 	for (const auto &f : m_files)
@@ -310,38 +312,32 @@ Torrent::DownloadError Torrent::download(int port)
 	for (const TrackerPtr &tracker : m_activeTrackers)
 		tracker->query(makeTrackerQuery(event));
 
-	disconnectPeers();
 	return event == TrackerEvent::Completed ? DownloadError::Completed : DownloadError::NetworkError;
 }
 
 bool Torrent::queryTrackers(const TrackerQuery &query)
 {
-	if (queryTracker(m_mainTracker, query))
-		return true;
-
+	bool success = queryTracker(m_mainTracker, query);
 	if (m_trackers.empty()) {
-		std::cerr << m_name << ": queryTracker(): This torrent does not provide multiple trackers" << std::endl;
-		return false;
+		if (!success)
+			std::cerr << m_name << ": queryTracker(): This torrent does not provide multiple trackers" << std::endl;
+
+		return success;
 	}
 
-	bool success = false;
 	for (const boost::any &s : m_trackers) {
 		if (s.type() == typeid(VectorType)) {
 			const VectorType &vType = *boost::unsafe_any_cast<VectorType>(&s);
 			for (const boost::any &announce : vType)
-				if ((success = queryTracker(Bencode::unsafe_cast<std::string>(&announce), query)));
-				//	break;
+				success = queryTracker(Bencode::unsafe_cast<std::string>(&announce), query);
 		}
-		else if (s.type() == typeid(std::string)
-			&& (success = queryTracker(Bencode::unsafe_cast<std::string>(&s), query)));
+		else if (s.type() == typeid(std::string))
+			success = queryTracker(Bencode::unsafe_cast<std::string>(&s), query);
+		else
+			std::cerr << m_name << ": warning: unkown tracker type: " << s.type().name() << std::endl;
 	}
 
-	if (!success) {
-		std::cerr << m_name << ": queryTrackers(): Tried to connect to " << m_trackers.size() << " tracker(s) but none seem to respond" << std::endl;
-		return false;
-	}
-
-	return true;
+	return success;
 }
 
 bool Torrent::queryTracker(const std::string &furl, const TrackerQuery &q)
@@ -364,42 +360,57 @@ bool Torrent::queryTracker(const std::string &furl, const TrackerQuery &q)
 	return true;
 }
 
+void Torrent::rawConnectPeers(const uint8_t *peers, size_t size)
+{
+	m_peers.reserve(size / 6);
+
+	// 6 bytes each (first 4 is ip address, last 2 port) all in big endian notation
+	for (size_t i = 0; i < size; i += 6) {
+		const uint8_t *iport = peers + i;
+		// Asynchronously connect to that peer, and do not add it to our
+		// active peers list unless a connection was established successfully.
+		auto peer = std::make_shared<Peer>(this);
+		peer->connect(ip2str(isLittleEndian() ? readLE32(iport) : readBE32(iport)), std::to_string(readBE16(iport + 4)));
+	}
+}
+
 void Torrent::connectToPeers(const boost::any &_peers)
 {
 	if (_peers.type() == typeid(std::string)) {
 		std::string peers = *boost::unsafe_any_cast<std::string>(&_peers);
 		m_peers.reserve(peers.length() / 6);
 
-		// 6 bytes each (first 4 is ip address, last 2 port) all in big endian notation
-		for (size_t i = 0; i < peers.length(); i += 6) {
-			const uint8_t *iport = (const uint8_t *)peers.c_str() + i;
-			// Asynchronously connect to that peer, and do not add it to our
-			// active peers list unless a connection was established successfully.
-			auto peer = std::make_shared<Peer>(this);
-			peer->connect(ip2str(isLittleEndian() ? readLE32(iport) : readBE32(iport)), std::to_string(readBE16(iport + 4)));
-		}
-	} else if (_peers.type() == typeid(Dictionary)) {	// no compat
+		return rawConnectPeers((const uint8_t *)peers.c_str(), peers.length());
+	}
+
+	if (_peers.type() == typeid(Dictionary)) {	// no compat
 		Dictionary peers = *boost::unsafe_any_cast<Dictionary>(&_peers);
-		assert(!peers.empty());
-
 		m_peers.reserve(peers.size());
-		for (const auto &pair : peers) {
-			Dictionary peerInfo = boost::any_cast<Dictionary>(pair.second);
-			std::string peerId = boost::any_cast<std::string>(peerInfo["peer id"]);
-			std::string ip = boost::any_cast<std::string>(peerInfo["ip"]);
-			int64_t port = boost::any_cast<int64_t>(peerInfo["port"]);
 
-			auto it = std::find_if(m_peers.begin(), m_peers.end(),
-					[ip] (const PeerPtr &peer) { return peer->getIP() == ip; });
-			if (it != m_peers.end())
-				continue;
+		try {
+			for (const auto &pair : peers) {
+				Dictionary peerInfo = boost::any_cast<Dictionary>(pair.second);
+				std::string peerId = boost::any_cast<std::string>(peerInfo["peer id"]);
+				std::string ip = boost::any_cast<std::string>(peerInfo["ip"]);
+				int64_t port = boost::any_cast<int64_t>(peerInfo["port"]);
 
-			// Asynchronously connect to that peer, and do not add it to our
-			// active peers list unless a connection was established successfully.
-			auto peer = std::make_shared<Peer>(this);
-			peer->setId(peerId);
-			peer->connect(ip, std::to_string(port));
+				auto it = std::find_if(m_peers.begin(), m_peers.end(),
+						[ip] (const PeerPtr &peer) { return peer->getIP() == ip; });
+				if (it != m_peers.end())
+					continue;
+
+				// Asynchronously connect to that peer, and do not add it to our
+				// active peers list unless a connection was established successfully.
+				auto peer = std::make_shared<Peer>(this);
+				peer->setId(peerId);
+				peer->connect(ip, std::to_string(port));
+			}
+		} catch (const std::exception &e) {
+			std::cerr << m_name << ": connectToPeers(dict): " << e.what() << std::endl;
 		}
+	} else {
+		// this can happen?
+		std::cerr << m_name << ": peers type unhandled: " << _peers.type().name() << std::endl;
 	}
 }
 
@@ -493,21 +504,15 @@ void Torrent::handlePeerDebug(const PeerPtr &peer, const std::string &msg)
 
 void Torrent::handlePieceCompleted(const PeerPtr &peer, uint32_t index, const DataBuffer<uint8_t> &pieceData)
 {
-	m_downloadedBytes += pieceData.size();
-	if (m_pieces[index].done) {
-		++m_pieceMisses;
-		std::cerr << m_name << ": " << peer->getIP() << " piece miss for piece #" << index << " total misses: " << m_pieceMisses << std::endl;
-		peer->sendHave(index);
-		return;
-	}
-
 	if (!checkPieceHash(&pieceData[0], pieceData.size(), index)) {
 		std::cerr << m_name << ": " << peer->getIP() << " checksum mismatch for piece " << index << "." << std::endl;
 		++m_hashMisses;
+		m_wastedBytes += pieceData.size();
 		return;
 	}
 
 	m_pieces[index].done = true;
+	m_downloadedBytes += pieceData.size();
 	++m_completedPieces;
 
 	int64_t beginPos = index * m_pieceLength;
@@ -537,8 +542,8 @@ void Torrent::handlePieceCompleted(const PeerPtr &peer, uint32_t index, const Da
 		peer->sendHave(index);
 
 	std::clog << m_name << ": " << peer->getIP() << " Completed " << m_completedPieces << "/" << m_pieces.size() << " pieces "
-		<< "(Downloaded: " << bytesToHumanReadable(m_downloadedBytes, true) << ", "
-		<< "Hash miss: " << m_hashMisses << ", piece miss: " << m_pieceMisses << ")"
+		<< "(Downloaded: " << bytesToHumanReadable(m_downloadedBytes, true) << ", Wasted: " << bytesToHumanReadable(m_wastedBytes, true) << ", "
+		<< "Hash miss: " << m_hashMisses << ")"
 		<< std::endl;
 }
 

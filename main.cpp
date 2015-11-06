@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 Ahmed Samy  <f.fallen45@gmail.com>
+ * Copyright (c) 2014, 2015 Ahmed Samy  <f.fallen45@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -132,19 +132,19 @@ int main(int argc, char *argv[])
 			auto error = t->download(startport++);
 			switch (error) {
 			case Torrent::DownloadError::Completed:
-				std::clog << t->name() << " finished download" << std::endl;
+				std::clog << t->name() << ": finished download" << std::endl;
 				++completed;
 				break;
 			case Torrent::DownloadError::AlreadyDownloaded:
-				std::clog << t->name() << " was already downloaded" << std::endl;
+				std::clog << t->name() << ": was already downloaded" << std::endl;
 				++completed;
 				break;
 			case Torrent::DownloadError::NetworkError:
-				std::clog << "Network error was encountered, check your internet connection" << std::endl;
+				std::clog << t->name() << ": Network error was encountered, check your internet connection" << std::endl;
 				++errors;
 				break;
 			case Torrent::DownloadError::TrackerQueryFailure:
-				std::clog << "The tracker has failed to respond in time or some internal error has occured" << std::endl;
+				std::clog << t->name() << ": The tracker(s) has failed to respond in time or some internal error has occured" << std::endl;
 				++errors;
 				break;
 			}

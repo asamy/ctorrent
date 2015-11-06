@@ -73,6 +73,7 @@ protected:
 	bool queryTracker(const std::string &url, const TrackerQuery &r);
 	bool parseFile(Dictionary &&v, VectorType &&pathList, size_t &index, int64_t &begin);
 	void findCompletedPieces(const struct File *f, size_t index);
+	void rawConnectPeers(const uint8_t *peers, size_t size);
 	void connectToPeers(const boost::any &peers);
 	void requestPiece(const PeerPtr &peer, size_t pieceIndex);
 	void requestPiece(const PeerPtr &peer);
@@ -106,22 +107,20 @@ private:
 	std::vector<Piece> m_pieces;
 	std::vector<File> m_files;
 
-	uint32_t m_completedPieces;
-	uint32_t m_uploadedBytes;
-	uint32_t m_downloadedBytes;
-
-	int64_t m_pieceLength;
-	int64_t m_totalSize;
-
+	size_t m_completedPieces;
+	size_t m_uploadedBytes;
+	size_t m_downloadedBytes;
+	size_t m_wastedBytes;
 	size_t m_hashMisses;
-	size_t m_pieceMisses;
+
+	size_t m_pieceLength;
+	size_t m_totalSize;
 
 	VectorType m_trackers;
 	std::string m_name;
 	std::string m_mainTracker;
 	std::string m_comment;
 
-	std::chrono::time_point<std::chrono::system_clock> m_timeToNextRequest;
 	std::atomic_bool m_paused;
 	uint8_t m_handshake[68];
 	uint8_t m_peerId[20];
@@ -131,3 +130,4 @@ private:
 };
 
 #endif
+

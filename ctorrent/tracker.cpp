@@ -57,7 +57,7 @@ bool Tracker::httpRequest(const TrackerQuery &r)
 
 	std::string req;
 	switch (r.event) {
-	case TrackerEvent::None:		req = ""; break;			// prevent a useless warning
+	case TrackerEvent::None:	req = ""; break;			// prevent a useless warning
 	case TrackerEvent::Completed: 	req = "event=completed&"; break;
 	case TrackerEvent::Stopped:	req = "event=stopped&"; break;
 	case TrackerEvent::Started:	req = "event=started&"; break;
@@ -65,12 +65,11 @@ bool Tracker::httpRequest(const TrackerQuery &r)
 
 	// Used to extract some things.
 	const uint8_t *handshake = m_torrent->handshake();
+	std::string infohash((const char *)&handshake[28], 20);
 
-	char infoHash[20];
-	memcpy(infoHash, &handshake[28], 20);
 	asio::streambuf params;
 	std::ostream buf(&params);
-	buf << "GET /announce?" << req << "info_hash=" << urlencode(std::string(infoHash, 20)) << "&port=6881&compact=1&key=1337T0RRENT"
+	buf << "GET /announce?" << req << "info_hash=" << urlencode(infohash) << "&port=6881&compact=1&key=1337T0RRENT"
 		<< "&peer_id=" << urlencode(std::string((const char *)m_torrent->peerId(), 20)) << "&downloaded=" << r.downloaded << "&uploaded=" << r.uploaded
 		<< "&left=" << r.remaining << " HTTP/1.0\r\n"
 		<< "Host: " << m_host << "\r\n"
@@ -152,7 +151,7 @@ bool Tracker::udpRequest(const TrackerQuery &r)
 		return false;
 	}
 
-	asio::ip::udp::endpoint s_endpoint;
+	asio::ip::udp::endpoint r_endpoint;
 	asio::ip::udp::endpoint endpoint = *ep_iter;
 	asio::ip::udp::socket socket(g_service);
 	socket.open(endpoint.protocol());
@@ -174,7 +173,7 @@ bool Tracker::udpRequest(const TrackerQuery &r)
 	}
 
 	std::clog << "waiting first" << std::endl;
-	size_t len = socket.receive_from(asio::buffer(buf, 16), s_endpoint);
+	size_t len = socket.receive_from(asio::buffer(buf, 16), r_endpoint);
 	if (len != 16) {
 		m_torrent->handleTrackerError(shared_from_this(), "failed to receive data");
 		socket.close();
@@ -220,7 +219,7 @@ bool Tracker::udpRequest(const TrackerQuery &r)
 
 	std::clog << "Waiting second" << std::endl;
 	uint8_t response[1500];
-	len = socket.receive_from(asio::buffer(response), s_endpoint);
+	len = socket.receive_from(asio::buffer(response, sizeof(response)), r_endpoint);
 	socket.close();
 	if (len < 20) {
 		m_torrent->handleTrackerError(shared_from_this(), "expected at least 20 bytes response");
@@ -239,7 +238,7 @@ bool Tracker::udpRequest(const TrackerQuery &r)
 
 	std::clog << "Connecting to peers: " << len << std::endl;
 	m_timeToNextRequest = std::chrono::system_clock::now() + std::chrono::milliseconds(readBE32(&response[8]));
-	m_torrent->connectToPeers(std::string((const char *)&response[20]));
+	m_torrent->rawConnectPeers(&response[20], len - 20);
 
 	return true;
 }

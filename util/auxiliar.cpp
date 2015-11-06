@@ -82,7 +82,7 @@ std::string bytesToHumanReadable(uint32_t bytes, bool si)
 {
 	uint32_t u = si ? 1000 : 1024;
 	if (bytes < u)
-		return bytes + " B";
+		return std::to_string(bytes) + " B";
 
 	size_t exp = static_cast<size_t>(std::log(bytes) / std::log(u));
 	const char *e = si ? "kMGTPE" : "KMGTPE";

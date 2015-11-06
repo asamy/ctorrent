@@ -37,9 +37,9 @@ enum class TrackerEvent {
 
 struct TrackerQuery {
 	TrackerEvent event;
-	int64_t downloaded;
-	int64_t uploaded;
-	int64_t remaining;
+	size_t downloaded;
+	size_t uploaded;
+	size_t remaining;
 };
 
 class Torrent;

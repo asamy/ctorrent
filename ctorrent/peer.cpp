@@ -196,9 +196,9 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 			}
 		}
 
-		m_torrent->requestPiece(shared_from_this());
 #endif
 
+		m_torrent->requestPiece(shared_from_this());
 		break;
 	}
 	case MT_Request:
