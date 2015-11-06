@@ -46,8 +46,9 @@ class Torrent;
 class Tracker : public std::enable_shared_from_this<Tracker>
 {
 public:
-	Tracker(Torrent *torrent, const std::string &host, const std::string &port, const std::string &proto)
+	Tracker(Torrent *torrent, const std::string &host, const std::string &port, const std::string &proto, uint16_t tport)
 		: m_torrent(torrent),
+		  m_tport(tport),
 		  m_host(host),
 		  m_port(port),
 		  m_prot(proto)
@@ -67,6 +68,7 @@ private:
 	Torrent *m_torrent;
 	TimePoint m_timeToNextRequest;
 
+	uint16_t m_tport;
 	std::string m_host;
 	std::string m_port;
 	std::string m_prot;

@@ -65,11 +65,12 @@ bool Tracker::httpRequest(const TrackerQuery &r)
 
 	// Used to extract some things.
 	const uint8_t *handshake = m_torrent->handshake();
-	std::string infohash((const char *)&handshake[28], 20);
+	char infoHash[20];
+	memcpy(infoHash, &handshake[28], 20);
 
 	asio::streambuf params;
 	std::ostream buf(&params);
-	buf << "GET /announce?" << req << "info_hash=" << urlencode(infohash) << "&port=6881&compact=1&key=1337T0RRENT"
+	buf << "GET /announce?" << req << "info_hash=" << urlencode(std::string(infoHash, 20)) << "&port=" << m_tport << "&compact=1&key=1337T0RRENT"
 		<< "&peer_id=" << urlencode(std::string((const char *)m_torrent->peerId(), 20)) << "&downloaded=" << r.downloaded << "&uploaded=" << r.uploaded
 		<< "&left=" << r.remaining << " HTTP/1.0\r\n"
 		<< "Host: " << m_host << "\r\n"
@@ -159,20 +160,19 @@ bool Tracker::udpRequest(const TrackerQuery &r)
 	static std::random_device rd;
 	static std::ranlux24 generator(rd());
 	static std::uniform_int_distribution<uint32_t> random(0x00, 0xFFFFFFFF);
-
 	uint32_t tx = random(generator);
+
 	uint8_t buf[16];
 	writeBE64(&buf[0], 0x41727101980);	// connection id
 	writeBE32(&buf[8], 0x00);		// action
 	writeBE32(&buf[12], tx);
 
-	if (socket.send_to(asio::buffer(buf, 16), endpoint) != 16) {
+	if (socket.send_to(asio::buffer(&buf[0], 16), endpoint) != 16) {
 		m_torrent->handleTrackerError(shared_from_this(), "Failed to initiate UDP transaction");
 		socket.close();
 		return false;
 	}
 
-	std::clog << "waiting first" << std::endl;
 	size_t len = socket.receive_from(asio::buffer(buf, 16), r_endpoint);
 	if (len != 16) {
 		m_torrent->handleTrackerError(shared_from_this(), "failed to receive data");
@@ -181,7 +181,7 @@ bool Tracker::udpRequest(const TrackerQuery &r)
 	}
 
 	if (readBE32(&buf[0]) != 0) {
-		m_torrent->handleTrackerError(shared_from_this(), "first 4 bytes not zero");
+		m_torrent->handleTrackerError(shared_from_this(), "action mismatch");
 		socket.close();
 		return false;
 	}
@@ -192,32 +192,31 @@ bool Tracker::udpRequest(const TrackerQuery &r)
 		return false;
 	}
 
-	uint8_t announce[98];
-	uint32_t cid = readBE64(&buf[8]);
-	writeBE64(&announce[0], cid);	// connection id
-	writeBE32(&announce[8], 1);	// action
-	writeBE32(&announce[12], tx);
+	uint64_t cid = readBE64(&buf[8]);
+	uint8_t re[98];
+	writeBE64(&re[0], cid);
+	writeBE32(&re[8], 1);
+	writeBE32(&re[12], tx);
 
 	const uint8_t *handshake = m_torrent->handshake();
-	memcpy(&announce[16], &handshake[28], 20);
-	memcpy(&announce[36], m_torrent->peerId(), 20);
+	memcpy(&re[16], &handshake[28], 20);
+	memcpy(&re[36], m_torrent->peerId(), 20);
 
-	writeBE64(&announce[56], r.downloaded);
-	writeBE64(&announce[64], r.remaining);
-	writeBE64(&announce[72], r.uploaded);
-	writeBE32(&announce[80], (uint32_t)r.event);
-	writeBE32(&announce[84], 0);		// ip
-	writeBE32(&announce[88], 0);		// key
-	writeBE32(&announce[92], std::numeric_limits<uint32_t>::max());	// num want
-	writeBE16(&announce[96], 6881);	// port
+	writeBE64(&re[56], r.downloaded);
+	writeBE64(&re[64], r.remaining);
+	writeBE64(&re[72], r.uploaded);
+	writeBE32(&re[80], (uint32_t)r.event);
+	writeBE32(&re[84], 0);	// ip
+	writeBE32(&re[88], 0);	// key
+	writeBE32(&re[92], -1);	// num want
+	writeBE16(&re[96], m_tport);
 
-	if (socket.send_to(asio::buffer(announce), endpoint) != sizeof(announce)) {
+	if (socket.send_to(asio::buffer(&re[0], sizeof(re)), endpoint) != sizeof(re)) {
 		m_torrent->handleTrackerError(shared_from_this(), "failed to send announce data");
 		socket.close();
 		return false;
 	}
 
-	std::clog << "Waiting second" << std::endl;
 	uint8_t response[1500];
 	len = socket.receive_from(asio::buffer(response, sizeof(response)), r_endpoint);
 	socket.close();
@@ -227,19 +226,17 @@ bool Tracker::udpRequest(const TrackerQuery &r)
 	}
 
 	if (readBE32(&response[0]) != 1) {
-		m_torrent->handleTrackerError(shared_from_this(), "action mismatch");
+		m_torrent->handleTrackerError(shared_from_this(), "2: action mismatch");
 		return false;
 	}
 
 	if (readBE32(&response[4]) != tx) {
-		m_torrent->handleTrackerError(shared_from_this(), "transaction mismatch");
+		m_torrent->handleTrackerError(shared_from_this(), "2: transaction mismatch");
 		return false;
 	}
 
-	std::clog << "Connecting to peers: " << len << std::endl;
 	m_timeToNextRequest = std::chrono::system_clock::now() + std::chrono::milliseconds(readBE32(&response[8]));
 	m_torrent->rawConnectPeers(&response[20], len - 20);
-
 	return true;
 }
 
