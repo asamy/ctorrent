@@ -49,6 +49,7 @@ int main(int argc, char *argv[])
 {
 	int startport = 6881;
 	std::string dldir = "Torrents";
+	std::vector<std::string> files;
 
 	po::options_description opts;
 	opts.add_options()
@@ -58,7 +59,7 @@ int main(int argc, char *argv[])
 		("nodownload,n", "do not download anything, just print info about torrents")
 		("piecesize,s", po::value(&maxRequestSize), "specify piece block size")
 		("dldir,d", po::value(&dldir), "specify downloads directory")
-		("torrents,t", po::value<std::vector<std::string>>(), "specify torrent file(s)");
+		("torrents,t", po::value<std::vector<std::string>>(&files)->required()->multitoken(), "specify torrent file(s)");
 
 	if (argc == 1) {
 		print_help(argv[0]);
@@ -89,16 +90,10 @@ int main(int argc, char *argv[])
 	if (vm.count("nodownload"))
 		nodownload = true;
 
-	if (!vm.count("torrents")) {
-		std::clog << argv[0] << ": Please specify torrent file(s) after arguments." << std::endl;
-		return 1;
-	}
-
 	if (!nodownload)
 		std::clog << "Using " << dldir << " as downloads directory and " 
 			<< bytesToHumanReadable(maxRequestSize, true) << " piece block size" << std::endl;
 
-	std::vector<std::string> files = vm["torrents"].as<std::vector<std::string>>();
 	int total = files.size();
 	int completed = 0;
 	int errors = 0;
@@ -122,7 +117,7 @@ int main(int argc, char *argv[])
 
 		++started;
 		threads[i] = std::thread([t, &startport, &completed, &errors]() {
-			auto error = t->download(startport++);
+			Torrent::DownloadError error = t->download(startport++);
 			switch (error) {
 			case Torrent::DownloadError::Completed:
 				std::clog << t->name() << ": finished download" << std::endl;
