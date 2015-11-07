@@ -1,12 +1,11 @@
 # CTorrent
 
-CTorrent is a torrent client written in C++11 with some help from Boost (for any and ASIO) + OpenSSL for SHA1.
+CTorrent is a torrent client written in C++11 with some help from Boost.
 
 ## Requirements
 
 - A C++ compiler with C++11 support (GCC or clang are preferred)
-- Boost C++ Libraries (for ASIO and any)
-- OpenSSL for SHA1
+- Boost C++ Libraries (for ASIO, SHA1, programoptions and any)
 
 ## Developer information
 

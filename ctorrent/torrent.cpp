@@ -28,7 +28,7 @@
 #include <iostream>
 #include <thread>
 
-#include <openssl/sha.h>
+#include <boost/uuid/sha1.hpp>
 
 Torrent::Torrent()
 	: m_completedPieces(0),
@@ -73,8 +73,14 @@ bool Torrent::open(const std::string &fileName, const std::string &downloadDir)
 	size_t bufferSize;
 	const char *buffer = bencode.buffer(pos, bufferSize);
 
-	uint8_t checkSum[SHA_DIGEST_LENGTH];
-	SHA1((uint8_t *)buffer, bufferSize, checkSum);
+	uint8_t checkSum[20];
+	boost::uuids::detail::sha1 sha1;
+	sha1.process_bytes(buffer, bufferSize);
+
+	unsigned int sum[5];
+	sha1.get_digest(sum);
+	for (int i = 0; i < 5; ++i)
+		writeBE32(&checkSum[i * 4], sum[i]);	
 
 	m_handshake[0] = 0x13;					// 19 length of string "BitTorrent protocol"
 	memcpy(&m_handshake[1], "BitTorrent protocol", 19);
@@ -233,9 +239,15 @@ bool Torrent::checkPieceHash(const uint8_t *data, size_t size, uint32_t index)
 	if (index >= m_pieces.size())
 		return false;
 
-	uint8_t checkSum[SHA_DIGEST_LENGTH];
-	SHA1(data, size, checkSum);
-	return memcmp(checkSum, m_pieces[index].hash, SHA_DIGEST_LENGTH) == 0;
+	uint8_t checkSum[20];
+	boost::uuids::detail::sha1 sha1;
+	sha1.process_bytes(data, size);
+
+	unsigned int sum[5];
+	sha1.get_digest(sum);
+	for (int i = 0; i < 5; ++i)
+		writeBE32(&checkSum[i * 4], sum[i]);	
+	return memcmp(checkSum, m_pieces[index].hash, 20) == 0;
 }
 
 void Torrent::findCompletedPieces(const File *f, size_t index)

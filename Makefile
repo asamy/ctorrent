@@ -5,7 +5,7 @@ CXX = g++
 BTYPE = -g3 -ggdb3 -O0 -D_DEBUG
 CXXFLAGS = -std=c++11 $(BTYPE) -fopenmp -Wall -Wextra -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter -I"."
 
-LIBS = -fopenmp -lcrypto
+LIBS = -fopenmp
 ifeq ($(OS),Windows_NT)
 LIBS += -lboost_system-mt -lboost_program_options-mt-lws2_32 -lshlwapi
 else
