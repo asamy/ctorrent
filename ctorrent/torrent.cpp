@@ -90,7 +90,7 @@ bool Torrent::open(const std::string &fileName, const std::string &downloadDir)
 	memcpy(&m_peerId[0], "-CT11000", 8);
 
 	static std::random_device rd;
-	static std::ranlux24 generator(rd());
+	static std::knuth_b generator(rd());
 	static std::uniform_int_distribution<uint8_t> random(0x00, 0xFF);
 	for (size_t i = 8; i < 20; ++i)
 		m_handshake[56 + i] = m_peerId[i] = random(generator);
@@ -254,6 +254,9 @@ double Torrent::downloadSpeed() const
 	for (size_t i = 0; i < m_pieces.size(); ++i)
 		if (m_pieces[i].done)
 			downloaded += pieceSize(i);
+
+	if (elapsed_s == 0)
+		return 0.0f;
 
 	double speed = (double)(downloaded / elapsed_s);
 	return (speed / 1024) * 0.0125;
