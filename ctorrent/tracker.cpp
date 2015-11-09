@@ -158,7 +158,7 @@ bool Tracker::udpRequest(const TrackerQuery &r)
 	socket.open(endpoint.protocol());
 
 	static std::random_device rd;
-	static std::ranlux24 generator(rd());
+	static std::mt19937 generator(rd());
 	static std::uniform_int_distribution<uint32_t> random(0x00, 0xFFFFFFFF);
 	uint32_t tx = random(generator);
 

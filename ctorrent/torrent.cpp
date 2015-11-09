@@ -63,7 +63,7 @@ bool Torrent::open(const std::string &fileName, const std::string &downloadDir)
 	m_mainTracker = bencode.unsafe_cast<std::string>(dict["announce"]);
 	if (dict.count("comment"))
 		m_comment = bencode.unsafe_cast<std::string>(dict["comment"]);
-	if (dict.count("announce-list") > 0)
+	if (dict.count("announce-list"))
 		m_trackers = bencode.unsafe_cast<VectorType>(dict["announce-list"]);
 
 	Dictionary info = bencode.unsafe_cast<Dictionary>(dict["info"]);
@@ -77,14 +77,14 @@ bool Torrent::open(const std::string &fileName, const std::string &downloadDir)
 	boost::uuids::detail::sha1 sha1;
 	sha1.process_bytes(buffer, bufferSize);
 
-	unsigned int sum[5];
-	sha1.get_digest(sum);
+	unsigned int digest[5];
+	sha1.get_digest(digest);
 	for (int i = 0; i < 5; ++i)
-		writeBE32(&checkSum[i * 4], sum[i]);	
+		writeBE32(&checkSum[i * 4], digest[i]);	
 
 	m_handshake[0] = 0x13;					// 19 length of string "BitTorrent protocol"
 	memcpy(&m_handshake[1], "BitTorrent protocol", 19);
-	memset(&m_handshake[20], 0x00, 8);			// reserved bytes	(last |= 0x01 for DHT or last |= 0x04 for FPE)
+	memset(&m_handshake[20], 0x00, 8);			// reserved bytes (last |= 0x01 for DHT or last |= 0x04 for FPE)
 	memcpy(&m_handshake[28], checkSum, 20);			// info hash
 	memcpy(&m_handshake[48], "-CT11000", 8);		// Azureus-style peer id (-CT0000-XXXXXXXXXXXX)
 	memcpy(&m_peerId[0], "-CT11000", 8);
@@ -234,6 +234,36 @@ bool Torrent::parseFile(Dictionary &&v, VectorType &&pathList, size_t &index, in
 	return true;
 }
 
+double Torrent::eta() const
+{
+	clock_t elapsed_s = elapsed() / CLOCKS_PER_SEC;
+	size_t downloaded = 0;
+
+	for (size_t i = 0; i < m_pieces.size(); ++i)
+		if (m_pieces[i].done)
+			downloaded += pieceSize(i);
+
+	return (double)(m_totalSize - downloaded) * elapsed_s / (double)downloaded;
+}
+
+double Torrent::downloadSpeed() const
+{
+	clock_t elapsed_s = elapsed() / CLOCKS_PER_SEC;
+	size_t downloaded = 0;
+
+	for (size_t i = 0; i < m_pieces.size(); ++i)
+		if (m_pieces[i].done)
+			downloaded += pieceSize(i);
+
+	double speed = (double)(downloaded / elapsed_s);
+	return (speed / 1024) * 0.0125;
+}
+
+clock_t Torrent::elapsed() const
+{
+	return clock() - m_startTime;
+}
+
 bool Torrent::checkPieceHash(const uint8_t *data, size_t size, uint32_t index)
 {
 	if (index >= m_pieces.size())
@@ -252,7 +282,6 @@ bool Torrent::checkPieceHash(const uint8_t *data, size_t size, uint32_t index)
 
 void Torrent::findCompletedPieces(const File *f, size_t index)
 {
-#if 0
 	FILE *fp = f->fp;
 	fseek(fp, 0L, SEEK_END);
 	off_t fileLength = ftello(fp);
@@ -276,7 +305,6 @@ void Torrent::findCompletedPieces(const File *f, size_t index)
 		std::cerr << m_name << ": insane piece size" << std::endl;
 		return;
 	}
-#endif
 }
 
 TrackerQuery Torrent::makeTrackerQuery(TrackerEvent event) const
@@ -300,6 +328,7 @@ Torrent::DownloadError Torrent::download(uint16_t port)
 	if (m_completedPieces == piecesNeeded)
 		return DownloadError::AlreadyDownloaded;
 
+	m_startTime = clock();
 	if (!queryTrackers(makeTrackerQuery(TrackerEvent::Started), port))
 		return DownloadError::TrackerQueryFailure;
 
@@ -314,14 +343,10 @@ Torrent::DownloadError Torrent::download(uint16_t port)
 		fclose(f.fp);
 	m_files.clear();
 
-	TrackerEvent event;
-	if (m_completedPieces == piecesNeeded)
-		event = TrackerEvent::Completed;
-	else
-		event = TrackerEvent::Stopped;
-
+	TrackerEvent event = m_completedPieces == piecesNeeded ? TrackerEvent::Completed : TrackerEvent::Stopped;
+	TrackerQuery q = makeTrackerQuery(event);
 	for (const TrackerPtr &tracker : m_activeTrackers)
-		tracker->query(makeTrackerQuery(event));
+		tracker->query(q);
 
 	return event == TrackerEvent::Completed ? DownloadError::Completed : DownloadError::NetworkError;
 }
@@ -565,6 +590,8 @@ void Torrent::handlePieceCompleted(const PeerPtr &peer, uint32_t index, const Da
 	std::clog << m_name << ": " << peer->getIP() << " Completed " << m_completedPieces << "/" << m_pieces.size() << " pieces "
 		<< "(Downloaded: " << bytesToHumanReadable(m_downloadedBytes, true) << ", Wasted: " << bytesToHumanReadable(m_wastedBytes, true) << ", "
 		<< "Hash miss: " << m_hashMisses << ")"
+		<< std::endl
+		<< m_name << ": Download speed: " << downloadSpeed() << " Mbps, ETA: " << eta() << " seconds"
 		<< std::endl;
 }
 

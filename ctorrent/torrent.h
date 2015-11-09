@@ -67,6 +67,10 @@ public:
 	inline uint32_t uploadedBytes() const { return m_uploadedBytes; }
 	inline std::string name() const { return m_name; }
 
+	double eta() const;
+	double downloadSpeed() const;
+	clock_t elapsed() const;
+
 protected:
 	bool checkPieceHash(const uint8_t *data, size_t size, uint32_t index);
 	bool queryTrackers(const TrackerQuery &r, uint16_t port);
@@ -75,7 +79,6 @@ protected:
 	void findCompletedPieces(const struct File *f, size_t index);
 	void rawConnectPeers(const uint8_t *peers, size_t size);
 	void connectToPeers(const boost::any &peers);
-	void requestPiece(const PeerPtr &peer, size_t pieceIndex);
 	void requestPiece(const PeerPtr &peer);
 	int64_t pieceSize(size_t pieceIndex) const;
 	inline bool pieceDone(size_t pieceIndex) const { return m_pieces[pieceIndex].done; }
@@ -121,7 +124,7 @@ private:
 	std::string m_mainTracker;
 	std::string m_comment;
 
-	std::atomic_bool m_paused;
+	clock_t m_startTime;
 	uint8_t m_handshake[68];
 	uint8_t m_peerId[20];
 
