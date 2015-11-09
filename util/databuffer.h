@@ -4,8 +4,9 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+#include <assert.h>
 
-template<class T>
+template <typename T>
 class DataBuffer
 {
 public:
@@ -14,22 +15,34 @@ public:
 		m_capacity(res),
 		m_buffer(new T[m_capacity])
 	{
-		m_allocated = true;
 	}
-	~DataBuffer()
-	{
-		if (m_buffer && m_allocated)
-			delete[] m_buffer;
-	}
+	~DataBuffer() { delete[] m_buffer; }
 
 	inline size_t size() const { return m_size; }
 	inline size_t cap() const { return m_capacity; }
 	inline T *data() const { return m_buffer; }
 
-	inline const T &operator[](size_t i) const { return m_buffer[i]; }
-	inline T &operator[](size_t i) { return m_buffer[i]; }
-	DataBuffer<T> &operator=(T *data) { if (m_allocated) delete []m_buffer; m_buffer = data; m_allocated = false; return *this; }
-	inline void setSize(size_t size) { m_size = size; }
+	inline const T &operator[](size_t i) const
+	{
+		assert(i < m_capacity);
+		return m_buffer[i];
+	}
+	inline T &operator[](size_t i)
+	{
+		assert(i < m_capacity);
+		return m_buffer[i];
+	}
+
+	inline void setData(T *data, size_t size)
+	{
+		delete []m_buffer;
+		m_buffer = new T[size];
+		m_capacity = size;
+		m_size = 0;
+		for (size_t i = 0; i < size; ++i)
+			m_buffer[i] = data[i];
+	}
+	inline void setSize(size_t s) { m_size = s; }
 
 	inline void clear(void)
 	{
@@ -77,7 +90,6 @@ public:
 	}
 
 private:
-	bool m_allocated;
 	size_t m_size;
 	size_t m_capacity;
 	T *m_buffer;

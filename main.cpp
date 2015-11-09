@@ -30,8 +30,6 @@
 #include <boost/program_options.hpp>
 #include <stdlib.h>
 
-namespace po = boost::program_options;
-
 static void print_help(const char *p)
 {
 	std::clog << "Usage: " << p << " <options...> <torrent...>" << std::endl;
@@ -51,6 +49,7 @@ int main(int argc, char *argv[])
 	std::string dldir = "Torrents";
 	std::vector<std::string> files;
 
+	namespace po = boost::program_options;
 	po::options_description opts;
 	opts.add_options()
 		("version,v", "print version string")
@@ -89,8 +88,7 @@ int main(int argc, char *argv[])
 	bool nodownload = false;
 	if (vm.count("nodownload"))
 		nodownload = true;
-
-	if (!nodownload)
+	else
 		std::clog << "Using " << dldir << " as downloads directory and " 
 			<< bytesToHumanReadable(maxRequestSize, true) << " piece block size" << std::endl;
 
@@ -105,8 +103,15 @@ int main(int argc, char *argv[])
 		std::string file = files[i];
 		Torrent *t = &torrents[i];
 
-		if (!t->open(file, dldir)) {
-			std::clog << file << ": corrupted torrent file" << std::endl;
+		try {
+			// yes, it won't throw exception in some cases...  may sound bad but whatever
+			if (!t->open(file, dldir)) {
+				std::cerr << file << ": corrupted torrent file" << std::endl;
+				++errors;
+				continue;
+			}
+		} catch (const std::exception &e) {
+			std::cerr << file << ": failed to load torrent file: " << e.what() << std::endl;
 			++errors;
 			continue;
 		}
@@ -145,7 +150,7 @@ int main(int argc, char *argv[])
 
 	if (!nodownload && started > 0) {
 		int last = 0;
-		while (completed != total) {
+		while (completed != total - errors) {
 			if (errors == total) {
 				std::cerr << "All torrents failed to download" << std::endl;
 				break;

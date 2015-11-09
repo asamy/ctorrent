@@ -30,13 +30,11 @@ Dictionary Bencode::decode(const char *data, size_t size)
 	if (data[0] != 'd')
 		return Dictionary();
 
-	++m_pos;
-	m_buffer = const_cast<char *>(data);
-	m_buffer.setSize(size);
+	m_buffer.setData(const_cast<char *>(&data[1]), size - 1);
 	return readDictionary();
 }
 
-Dictionary Bencode::decode(const std::string& fileName)
+Dictionary Bencode::decode(const std::string &fileName)
 {
 	std::ifstream f(fileName, std::ios_base::binary | std::ios_base::in);
 	if (!f.is_open())
@@ -46,7 +44,7 @@ Dictionary Bencode::decode(const std::string& fileName)
 	size_t size = f.tellg();
 	f.seekg(0, f.beg);
 
-	char *buffer = new char[size];
+	char buffer[size];
 	f.read(buffer, size);
 	f.close();
 	return decode(buffer, size);
@@ -56,18 +54,17 @@ template <typename T>
 bool Bencode::readIntUntil(const char byte, T &value)
 {
 	// Find first occurance of byte in the data buffer
-	size_t size = 0, pos = 0;
-	for (pos = m_pos; pos < m_buffer.size() && m_buffer[pos] != byte; ++pos, ++size);
+	size_t pos = 0;
+	for (pos = m_pos; pos < m_buffer.cap() && m_buffer[pos] != byte; ++pos);
 	// Sanity check
 	if (m_buffer[pos] != byte)
 		return false;
 
-	char buffer[size];
-	memcpy(buffer, &m_buffer[m_pos], size);
-	buffer[size] = '\0';
+	char buffer[pos - m_pos];
+	strncpy(buffer, &m_buffer[m_pos], pos - m_pos);
 
-	std::istringstream ss(buffer);
-	ss >> value;
+	std::istringstream is(buffer);
+	is >> value;
 
 	m_pos = pos + 1;
 	return true;
@@ -79,7 +76,7 @@ int64_t Bencode::readInt()
 	if (readIntUntil('e', i))
 		return i;
 
-	return ~0;
+	return std::numeric_limits<int64_t>::max();
 }
 
 uint64_t Bencode::readUint()
@@ -121,14 +118,14 @@ std::string Bencode::readString()
 	if (!readIntUntil(':', len))
 		return std::string();
 
-	if (len + m_pos > m_buffer.size())
+	if (len + m_pos > m_buffer.cap())
 		return std::string();
 
 	char buffer[len];
-	memcpy(buffer, (char *)&m_buffer[m_pos], len);
+	memcpy(buffer, &m_buffer[m_pos], len);
 
 	m_pos += len;
-	return std::string((const char *)buffer, len);
+	return std::string(buffer, len);
 }
 
 Dictionary Bencode::readDictionary()
@@ -166,3 +163,4 @@ Dictionary Bencode::readDictionary()
 
 	return ret;
 }
+

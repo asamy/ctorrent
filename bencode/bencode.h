@@ -41,7 +41,7 @@ public:
 
 	Dictionary decode(const std::string& fileName);
 	Dictionary decode(const char *, size_t);
-	inline void encode(const Dictionary& dict) { return writeDictionary(dict); }
+	inline void encode(const Dictionary &dict) { m_buffer.setSize(m_pos); return writeDictionary(dict); }
 
 	template <typename T>
 	static inline T cast(const boost::any &value)
@@ -55,7 +55,8 @@ public:
 	}
 
 	size_t pos() const { return m_pos; }
-	const char *buffer(size_t pos, size_t &bufferSize) const {
+	const char *buffer(size_t pos, size_t &bufferSize) const
+	{
 		bufferSize = m_buffer.size() - pos;
 		return &m_buffer[pos];
 	}
@@ -78,7 +79,7 @@ protected:
 	bool readIntUntil(const char byte, T &value);
 
 	inline bool unpackByte(char &b) {
-		if (m_pos + 1 > m_buffer.size())
+		if (m_pos + 1 > m_buffer.cap())
 			return false;
 
 		b = m_buffer[m_pos++];
@@ -93,3 +94,4 @@ private:
 };
 
 #endif
+
