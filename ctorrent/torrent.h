@@ -36,7 +36,7 @@
 #include <fstream>
 #include <iosfwd>
 
-static int64_t maxRequestSize = 16384;		// 16KiB initial (per piece)
+static size_t maxRequestSize = 16384;		// 16KiB initial (per piece)
 class Torrent
 {
 private:
@@ -80,6 +80,7 @@ protected:
 	void rawConnectPeers(const uint8_t *peers, size_t size);
 	void connectToPeers(const boost::any &peers);
 	void requestPiece(const PeerPtr &peer);
+	size_t computeDownloaded() const;
 	int64_t pieceSize(size_t pieceIndex) const;
 	inline bool pieceDone(size_t pieceIndex) const { return m_pieces[pieceIndex].done; }
 

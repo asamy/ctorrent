@@ -237,24 +237,14 @@ bool Torrent::parseFile(Dictionary &&v, VectorType &&pathList, size_t &index, in
 double Torrent::eta() const
 {
 	clock_t elapsed_s = elapsed() / CLOCKS_PER_SEC;
-	size_t downloaded = 0;
-
-	for (size_t i = 0; i < m_pieces.size(); ++i)
-		if (m_pieces[i].done)
-			downloaded += pieceSize(i);
-
+	size_t downloaded = computeDownloaded();
 	return (double)(m_totalSize - downloaded) * elapsed_s / (double)downloaded;
 }
 
 double Torrent::downloadSpeed() const
 {
 	clock_t elapsed_s = elapsed() / CLOCKS_PER_SEC;
-	size_t downloaded = 0;
-
-	for (size_t i = 0; i < m_pieces.size(); ++i)
-		if (m_pieces[i].done)
-			downloaded += pieceSize(i);
-
+	size_t downloaded = computeDownloaded();
 	if (elapsed_s == 0)
 		return 0.0f;
 
@@ -276,10 +266,10 @@ bool Torrent::checkPieceHash(const uint8_t *data, size_t size, uint32_t index)
 	boost::uuids::detail::sha1 sha1;
 	sha1.process_bytes(data, size);
 
-	unsigned int sum[5];
-	sha1.get_digest(sum);
+	unsigned int digest[5];
+	sha1.get_digest(digest);
 	for (int i = 0; i < 5; ++i)
-		writeBE32(&checkSum[i * 4], sum[i]);	
+		writeBE32(&checkSum[i * 4], digest[i]);	
 	return memcmp(checkSum, m_pieces[index].hash, 20) == 0;
 }
 
@@ -303,7 +293,7 @@ void Torrent::findCompletedPieces(const File *f, size_t index)
 
 	size_t pieceBegin = pieceIndex * m_pieceLength;
 	size_t pieceLength = pieceSize(pieceIndex);
-	int64_t fileEnd = f->begin + f->length;
+	size_t fileEnd = f->begin + f->length;
 	if (pieceBegin + pieceLength > fileEnd) {
 		std::cerr << m_name << ": insane piece size" << std::endl;
 		return;
@@ -316,11 +306,7 @@ TrackerQuery Torrent::makeTrackerQuery(TrackerEvent event) const
 
 	q.event = event;
 	q.uploaded = 0;
-	q.downloaded = 0;
-
-	for (size_t i = 0; i < m_pieces.size(); ++i)
-		if (m_pieces[i].done)
-			q.downloaded += pieceSize(i);
+	q.downloaded = computeDownloaded();
 	q.remaining = m_totalSize - q.downloaded;
 	return q;
 }
@@ -364,22 +350,19 @@ bool Torrent::queryTrackers(const TrackerQuery &query, uint16_t port)
 		return success;
 	}
 
+	bool alt = false;
 	for (const boost::any &s : m_trackers) {
 		if (s.type() == typeid(VectorType)) {
 			const VectorType &vType = *boost::unsafe_any_cast<VectorType>(&s);
 			for (const boost::any &announce : vType)
-				if (!success)
-					success = queryTracker(Bencode::unsafe_cast<std::string>(&announce), query, port);
-		} else if (s.type() == typeid(std::string)) {
-			if (!success)
-				success = queryTracker(Bencode::unsafe_cast<std::string>(&s), query, port);
-		} else {
-			// This can actually happen?
+				alt = queryTracker(Bencode::unsafe_cast<std::string>(&announce), query, port);
+		} else if (s.type() == typeid(std::string))
+			alt = queryTracker(Bencode::unsafe_cast<std::string>(&s), query, port);
+		else
 			std::cerr << m_name << ": warning: unkown tracker type: " << s.type().name() << std::endl;
-		}
 	}
 
-	return success;
+	return success || alt;
 }
 
 bool Torrent::queryTracker(const std::string &furl, const TrackerQuery &q, uint16_t tport)
@@ -409,7 +392,7 @@ void Torrent::rawConnectPeers(const uint8_t *peers, size_t size)
 	// 6 bytes each (first 4 is ip address, last 2 port) all in big endian notation
 	for (size_t i = 0; i < size; i += 6) {
 		const uint8_t *iport = peers + i;
-		uint32_t ip =isLittleEndian() ? readLE32(iport) : readBE32(iport);
+		uint32_t ip = isLittleEndian() ? readLE32(iport) : readBE32(iport);
 
 		auto it = std::find_if(m_peers.begin(), m_peers.end(),
 				[ip] (const PeerPtr &peer) { return peer->ip() == ip; });
@@ -496,28 +479,6 @@ void Torrent::requestPiece(const PeerPtr &peer)
 	size_t index = 0;
 	int32_t priority = std::numeric_limits<int32_t>::max();
 
-#if 0
-	std::vector<size_t> peerPieces = peer->getPieces();
-	for (size_t i = 0; i < peerPieces.size(); ++i) {
-		size_t piece = peerPieces[i];
-		if (piece >= m_pieces.size())
-			continue;
-
-		Piece *p = &m_pieces[piece];
-		if (p->done)
-			continue;
-
-		if (!p->priority) {
-			p->priority = 1;
-			return peer->sendPieceRequest(piece);
-		}
-
-		if (priority > p->priority) {
-			priority = p->priority;
-			index = piece;
-		}
-	}
-#else
 	for (size_t i = 0; i < m_pieces.size(); ++i) {
 		Piece *p = &m_pieces[i];
 		if (p->done || !peer->hasPiece(i))
@@ -533,7 +494,6 @@ void Torrent::requestPiece(const PeerPtr &peer)
 			index = i;
 		}
 	}
-#endif
 
 	if (priority != std::numeric_limits<int32_t>::max()) {
 		++m_pieces[index].priority;
@@ -566,8 +526,7 @@ void Torrent::handlePieceCompleted(const PeerPtr &peer, uint32_t index, const Da
 
 	int64_t beginPos = index * m_pieceLength;
 	const uint8_t *data = &pieceData[0];
-	size_t off = 0;
-	size_t size = pieceData.size();
+	size_t off = 0, size = pieceData.size();
 	for (const File &file : m_files) {
 		if (beginPos < file.begin)
 			break;
@@ -602,7 +561,7 @@ void Torrent::handleRequestBlock(const PeerPtr &peer, uint32_t index, uint32_t b
 {
 	// Peer requested block from us
 	if (index >= m_pieces.size() || !m_pieces[index].done)
-		return;		// We haven't finished downloading that piece yet, so we can't give it out.
+		return peer->disconnect();
 
 	size_t blockEnd = begin + length;
 	if (blockEnd > pieceSize(index))
@@ -611,6 +570,16 @@ void Torrent::handleRequestBlock(const PeerPtr &peer, uint32_t index, uint32_t b
 	uint8_t block[length];
 	m_uploadedBytes += length;
 	/// TODO
+}
+
+size_t Torrent::computeDownloaded() const
+{
+	size_t downloaded = 0;
+
+	for (size_t i = 0; i < m_pieces.size(); ++i)
+		if (m_pieces[i].done)
+			downloaded += pieceSize(i);
+	return downloaded;
 }
 
 int64_t Torrent::pieceSize(size_t pieceIndex) const

@@ -234,7 +234,7 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 		in >> begin;
 
 		payloadSize -= 8;	// deduct index and begin
-		if (payloadSize <= 0 || payloadSize > maxRequestSize)
+		if (payloadSize == 0 || payloadSize > maxRequestSize)
 			return handleError("received too big piece block of size " + bytesToHumanReadable(payloadSize, true));
 
 		auto it = std::find_if(m_queue.begin(), m_queue.end(),

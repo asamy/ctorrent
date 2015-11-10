@@ -28,7 +28,6 @@
 #include <iostream>
 
 #include <boost/program_options.hpp>
-#include <stdlib.h>
 
 static void print_help(const char *p)
 {
@@ -88,18 +87,21 @@ int main(int argc, char *argv[])
 	bool nodownload = false;
 	if (vm.count("nodownload"))
 		nodownload = true;
-	else
+	else {
+		if (vm.count("piecesize"))
+			maxRequestSize = 1 << (32 - __builtin_clz(maxRequestSize - 1));
 		std::clog << "Using " << dldir << " as downloads directory and " 
 			<< bytesToHumanReadable(maxRequestSize, true) << " piece block size" << std::endl;
+	}
 
-	int total = files.size();
-	int completed = 0;
-	int errors = 0;
-	int started = 0;
+	size_t total = files.size();
+	size_t completed = 0;
+	size_t errors = 0;
+	size_t started = 0;
 
 	Torrent torrents[total];
 	std::thread threads[total];
-	for (int i = 0; i < files.size(); ++i) {
+	for (size_t i = 0; i < files.size(); ++i) {
 		std::string file = files[i];
 		Torrent *t = &torrents[i];
 
