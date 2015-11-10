@@ -2,7 +2,7 @@ BIN_DIR = bin
 BIN = $(BIN_DIR)/ctorrent
 
 DEP_DIR = dep
-DEPFLAGS = -MT $@ -MMD -MP -MF $(DEP_DIR)/$*.Td
+DEPFLAGS = -MT $@ -MMD -MP -MF $(DEP_DIR)/$*.d
 
 CXX = g++
 BTYPE = -g3 -ggdb3 -O0 -D_DEBUG
@@ -21,27 +21,30 @@ SRC = bencode/decoder.cpp bencode/encoder.cpp \
 	net/connection.cpp net/inputmessage.cpp net/outputmessage.cpp \
 	util/auxiliar.cpp \
 	main.cpp
-
 OBJ = $(SRC:%.cpp=$(OBJ_DIR)/%.o)
+DEP = $(SRC:%.cpp=$(DEP_DIR)/%.d)
 
 .PHONY: all clean
+.PRECIOUS: $(DEP_DIR)/%.d
 
 all: $(BIN)
 clean:
 	$(RM) $(OBJ_DIR)/*.o
 	$(RM) $(OBJ_DIR)/*/*.o
-	$(RM) $(DEP_DIR)/*.*
-	$(RM) $(DEP_DIR)/*/*.*
+	$(RM) $(DEP_DIR)/*.d
+	$(RM) $(DEP_DIR)/*/*.d
 	$(RM) $(BIN)
 
-$(BIN): $(DEP_DIR) $(OBJ_DIR) $(BIN_DIR) $(OBJ)
-	@echo "LD   $@"
-	@$(CXX) -o $@ $(OBJ) $(LIBS)
+$(BIN): $(DEP_DIR) $(OBJ_DIR) $(BIN_DIR) $(OBJ) $(DEP)
+#	@echo "LD   $@"
+	$(CXX) -o $@ $(OBJ) $(LIBS)
 
-$(OBJ_DIR)/%.o: %.cpp
-	@echo "CXX  $<"
-	@$(CXX) -c $(CXXFLAGS) -o $@ $<
-	@mv -f $(DEP_DIR)/$*.Td $(DEP_DIR)/$*.d
+$(OBJ_DIR)/%.o: %.cpp $(DEP_DIR)/%.d
+#	@echo "CXX  $<"
+	$(CXX) -c $(CXXFLAGS) -o $@ $<
+
+-include $(DEP)
+$(DEP_DIR)/%.d: ;
 
 $(DEP_DIR):
 	@mkdir -p $(DEP_DIR)
@@ -59,3 +62,4 @@ $(OBJ_DIR):
 	@mkdir -p $(OBJ_DIR)/ctorrent
 	@mkdir -p $(OBJ_DIR)/net
 	@mkdir -p $(OBJ_DIR)/util
+
