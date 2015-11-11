@@ -77,7 +77,7 @@ bool Torrent::open(const std::string &fileName, const std::string &downloadDir)
 	boost::uuids::detail::sha1 sha1;
 	sha1.process_bytes(buffer, bufferSize);
 
-	unsigned int digest[5];
+	uint32_t digest[5];
 	sha1.get_digest(digest);
 	for (int i = 0; i < 5; ++i)
 		writeBE32(&checkSum[i * 4], digest[i]);	

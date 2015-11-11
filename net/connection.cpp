@@ -83,15 +83,15 @@ void Connection::write(const uint8_t *bytes, size_t size)
 		} else
 			m_outputStream = std::shared_ptr<asio::streambuf>(new asio::streambuf);
 		g_connectionLock.unlock();
-
-		m_delayedWriteTimer.cancel();
-		m_delayedWriteTimer.expires_from_now(boost::posix_time::milliseconds(10));
-		m_delayedWriteTimer.async_wait(std::bind(&Connection::internalWrite, this, std::placeholders::_1));
 	}
 
 	std::ostream os(m_outputStream.get());
 	os.write((const char *)bytes, size);
 	os.flush();
+
+	m_delayedWriteTimer.cancel();
+	m_delayedWriteTimer.expires_from_now(boost::posix_time::milliseconds(10));
+	m_delayedWriteTimer.async_wait(std::bind(&Connection::internalWrite, this, std::placeholders::_1));
 }
 
 void Connection::read_partial(size_t bytes, const ReadCallback &rc)
