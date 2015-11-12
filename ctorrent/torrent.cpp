@@ -266,7 +266,7 @@ bool Torrent::checkPieceHash(const uint8_t *data, size_t size, uint32_t index)
 	boost::uuids::detail::sha1 sha1;
 	sha1.process_bytes(data, size);
 
-	unsigned int digest[5];
+	uint32_t digest[5];
 	sha1.get_digest(digest);
 	for (int i = 0; i < 5; ++i)
 		writeBE32(&checkSum[i * 4], digest[i]);	
@@ -410,8 +410,6 @@ void Torrent::connectToPeers(const boost::any &_peers)
 {
 	if (_peers.type() == typeid(std::string)) {
 		std::string peers = *boost::unsafe_any_cast<std::string>(&_peers);
-		m_peers.reserve(peers.length() / 6);
-
 		return rawConnectPeers((const uint8_t *)peers.c_str(), peers.length());
 	}
 
