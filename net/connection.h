@@ -51,8 +51,10 @@ public:
 	Connection();
 	~Connection();
 
+	// poll io service (general purpose)
 	static void poll();
 
+	void setErrorCallback(const ErrorCallback &ec) { m_eh = ec; }
 	void connect(const std::string &host, const std::string &port, const ConnectCallback &cb);
 	void close(bool warn = true);	/// Pass false in ErrorCallback otherwise possible infinite recursion
 	bool isConnected() const { return m_socket.is_open(); }
@@ -63,10 +65,8 @@ public:
 	void read_partial(size_t bytes, const ReadCallback &rc);
 	void read(size_t bytes, const ReadCallback &rc);
 
-	std::string getIPString() const { return ip2str(getIP()); }
+	std::string getIPString() const;
 	uint32_t getIP() const;
-
-	void setErrorCallback(const ErrorCallback &ec) { m_eh = ec; }
 
 protected:
 	void internalWrite(const boost::system::error_code &);
@@ -93,3 +93,4 @@ private:
 extern asio::io_service g_service;
 
 #endif
+

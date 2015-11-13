@@ -19,9 +19,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
-#ifndef __server_h
-#define __server_h
+#ifndef __SERVER_H
+#define __SERVER_H
 
 #include "connection.h"
 
@@ -31,10 +30,12 @@ public:
 	Server(uint16_t port);
 	~Server();
 
+	bool stopped() const { return m_stopped; }
 	void stop();
 	void accept(const Acceptor &ac);
 
 private:
+	bool m_stopped;
 	asio::ip::tcp::acceptor m_acceptor;
 };
 

@@ -24,27 +24,31 @@
 Server::Server(uint16_t port)
 	: m_acceptor(g_service, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), port))
 {
+	m_acceptor.set_option(asio::ip::tcp::acceptor::reuse_address(true));
 }
 
 Server::~Server()
 {
+	m_acceptor.cancel();
+	m_acceptor.close();
 }
 
 void Server::stop()
 {
 	m_acceptor.cancel();
 	m_acceptor.close();
+	m_stopped = true;
 }
 
 void Server::accept(const Acceptor &ac)
 {
-	Connection *conn = new Connection();
+	Connection *conn = new(std::nothrow) Connection();
 	m_acceptor.async_accept(conn->m_socket,
 		[=] (const boost::system::error_code &error) {
-			if (error)
-				delete conn;
-			else
-				ac(conn);
+			if (!error)
+				return ac(conn);
+
+			delete conn;
 		}
 	);
 }

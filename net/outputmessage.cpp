@@ -26,11 +26,10 @@
 #include <util/serializer.h>
 
 OutputMessage::OutputMessage(ByteOrder order, size_t fixedSize)
-	: m_pos(0),
+	: m_buffer(fixedSize != 0 ? fixedSize : 64),
+	  m_pos(0),
 	  m_order(order)
 {
-	if (fixedSize != 0)
-		m_buffer.reserve(fixedSize);
 }
 
 OutputMessage::~OutputMessage()

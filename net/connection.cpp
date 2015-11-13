@@ -188,6 +188,19 @@ void Connection::handleError(const boost::system::error_code& error)
 		close();
 }
 
+std::string Connection::getIPString() const
+{
+	if (!isConnected())
+		return "0000.000.00.0";
+
+	boost::system::error_code error;
+	const asio::ip::tcp::endpoint ip = m_socket.remote_endpoint(error);
+	if (!error)
+		return ip.address().to_string();
+
+	return "0.00.000.0000";
+}
+
 uint32_t Connection::getIP() const
 {
 	if (!isConnected())

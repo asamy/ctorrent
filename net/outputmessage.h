@@ -27,6 +27,12 @@
 class OutputMessage
 {
 public:
+	explicit OutputMessage(DataBuffer<uint8_t> &&buffer)
+		: m_buffer(std::move(buffer)),
+		  m_pos(buffer.size()),
+		  m_order(ByteOrder::BigEndian)
+	{
+	}
 	OutputMessage(ByteOrder order, size_t fixedSize = 0);
 	~OutputMessage();
 
