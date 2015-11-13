@@ -87,6 +87,8 @@ private:
 
 	std::shared_ptr<asio::streambuf> m_outputStream;
 	asio::streambuf m_inputStream;
+
+	friend class Server;
 };
 extern asio::io_service g_service;
 
