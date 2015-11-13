@@ -302,12 +302,14 @@ void Torrent::findCompletedPieces(const File *f, size_t index)
 
 TrackerQuery Torrent::makeTrackerQuery(TrackerEvent event) const
 {
-	TrackerQuery q;
+	size_t downloaded = computeDownloaded();
+	TrackerQuery q = {
+		.event = event,
+		.downloaded = downloaded,
+		.uploaded = m_uploadedBytes,
+		.remaining = m_totalSize - downloaded
+	};
 
-	q.event = event;
-	q.uploaded = 0;
-	q.downloaded = computeDownloaded();
-	q.remaining = m_totalSize - q.downloaded;
 	return q;
 }
 
@@ -557,7 +559,7 @@ void Torrent::handlePieceCompleted(const PeerPtr &peer, uint32_t index, const Da
 
 void Torrent::handleRequestBlock(const PeerPtr &peer, uint32_t index, uint32_t begin, uint32_t length)
 {
-	// Peer requested block from us
+	// Peer requested piece block from us
 	if (index >= m_pieces.size() || !m_pieces[index].done)
 		return peer->disconnect();
 
@@ -566,8 +568,50 @@ void Torrent::handleRequestBlock(const PeerPtr &peer, uint32_t index, uint32_t b
 		return peer->disconnect();		// This peer is on drugs
 
 	uint8_t block[length];
+	size_t writePos = 0;
+	size_t blockBegin = begin + (index * m_pieceLength);
+
+	// Figure out which file has that piece
+	for (const File &file : m_files) {
+		size_t filePos = blockBegin + writePos;
+		if (filePos < file.begin)
+			break;
+
+		size_t fileEnd = file.begin + file.length;
+		if (filePos > fileEnd)
+			continue;
+
+		// check if that file was open for read, if so no need to re-open.
+		errno = 0;
+		FILE *fp = file.fp;
+		uint8_t c = fgetc(fp);
+		if (errno == EBADF && !(fp = fopen(file.path.c_str(), "rb"))) {
+			std::cerr << m_name << ": handleRequestBlock(): unable to open: " << file.path.c_str() << ": " << strerror(errno) << std::endl;
+			return;
+		}
+
+		// seek to where it begins
+		fseek(fp, filePos - file.begin, SEEK_SET);
+
+		// read up to file end but do not exceed requested buffer length
+		size_t readSize = std::max(fileEnd - filePos, length - writePos);
+		size_t max = writePos + readSize;
+		while (writePos < max) {
+			int read = fread(&block[writePos], 1, readSize - writePos, fp);
+			if (read < 0) {
+				fclose(fp);
+				std::cerr << m_name << ": handleRequestBlock(): unable to read from: " << file.path.c_str() << std::endl;
+				return;
+			}
+
+			writePos += read;
+		}
+
+		fclose(fp);
+	}
+
+	peer->sendPieceBlock(index, begin, block, length);
 	m_uploadedBytes += length;
-	/// TODO
 }
 
 size_t Torrent::computeDownloaded() const

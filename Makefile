@@ -18,7 +18,7 @@ endif
 OBJ_DIR = obj
 SRC = bencode/decoder.cpp bencode/encoder.cpp \
 	ctorrent/tracker.cpp ctorrent/peer.cpp ctorrent/torrent.cpp \
-	net/connection.cpp net/inputmessage.cpp net/outputmessage.cpp \
+	net/server.cpp net/connection.cpp net/inputmessage.cpp net/outputmessage.cpp \
 	util/auxiliar.cpp \
 	main.cpp
 OBJ = $(SRC:%.cpp=$(OBJ_DIR)/%.o)

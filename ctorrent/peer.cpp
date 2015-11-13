@@ -320,6 +320,18 @@ void Peer::sendHave(uint32_t index)
 	m_conn->write(out);
 }
 
+void Peer::sendPieceBlock(uint32_t index, uint32_t begin, uint8_t *block, uint32_t length)
+{
+	OutputMessage out(ByteOrder::BigEndian, 13);
+	out << 9 + length;	// length
+	out << (uint8_t)MT_PieceBlock;
+	out << index;
+	out << begin;
+	out.addBytes(block, length);
+
+	m_conn->write(out);
+}
+
 void Peer::sendPieceRequest(uint32_t index)
 {
 	sendInterested();
