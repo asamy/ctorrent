@@ -39,18 +39,20 @@ OutputMessage::~OutputMessage()
 
 void OutputMessage::addBytes(const uint8_t *bytes, size_t size)
 {
-	m_buffer.reserve(size);
+	m_buffer.grow(m_buffer.size() + size);
 	memcpy(&m_buffer[m_pos], &bytes[0], size);
 	m_pos += size;
 }
 
 void OutputMessage::addByte(uint8_t byte)
 {
+	m_buffer.grow(m_buffer.size() + 1);
 	m_buffer[m_pos++] = byte;
 }
 
 void OutputMessage::addU16(uint16_t val)
 {
+	m_buffer.grow(m_buffer.size() + 1);
 	if (m_order == ByteOrder::BigEndian)
 		writeBE16(&m_buffer[m_pos], val);
 	else
@@ -60,6 +62,7 @@ void OutputMessage::addU16(uint16_t val)
 
 void OutputMessage::addU32(uint32_t val)
 {
+	m_buffer.grow(m_buffer.size() + 4);
 	if (m_order == ByteOrder::BigEndian)
 		writeBE32(&m_buffer[m_pos], val);
 	else
@@ -69,6 +72,7 @@ void OutputMessage::addU32(uint32_t val)
 
 void OutputMessage::addU64(uint64_t val)
 {
+	m_buffer.grow(m_buffer.size() + 8);
 	if (m_order == ByteOrder::BigEndian)
 		writeBE64(&m_buffer[m_pos], val);
 	else
@@ -81,6 +85,7 @@ void OutputMessage::addString(const std::string &str)
 	uint16_t len = str.length();
 
 	addU16(len);
+	m_buffer.grow(m_buffer.size() + len);
 	memcpy((char *)&m_buffer[m_pos], str.c_str(), len);
 	m_pos += len;
 }
