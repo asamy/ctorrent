@@ -45,7 +45,6 @@ Torrent::Torrent()
 
 Torrent::~Torrent()
 {
-	std::clog << "Destruct torrent" << std::endl;
 	for (auto f : m_files)
 		fclose(f.fp);
 	m_files.clear();
@@ -408,7 +407,6 @@ Torrent::DownloadError Torrent::download(uint16_t port)
 	while (!isFinished()) {
 		m_listener->accept(
 			[this] (Connection *c) {
-				std::clog << "New connection: " << c->getIPString() << std::endl;
 				auto peer = std::make_shared<Peer>(c, this);
 				peer->verify();
 			}
@@ -441,9 +439,8 @@ bool Torrent::seed(uint16_t port)
 	while (!m_listener->stopped()) {
 		m_listener->accept(
 			[this] (Connection *c) {
-				std::clog << "New connection: " << c->getIPString() << std::endl;
-			//	auto peer = std::make_shared<Peer>(c, this);
-			//	peer->verify();
+				auto peer = std::make_shared<Peer>(c, this);
+				peer->verify();
 			}
 		);
 	}
