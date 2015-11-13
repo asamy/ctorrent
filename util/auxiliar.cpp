@@ -178,3 +178,4 @@ bool nodeExists(const std::string &node)
 	return stat(node.c_str(), &st) == 0;
 #endif
 }
+

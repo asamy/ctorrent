@@ -37,17 +37,23 @@ Torrent::Torrent()
 	  m_wastedBytes(0),
 	  m_hashMisses(0),
 	  m_pieceLength(0),
-	  m_totalSize(0)
+	  m_totalSize(0),
+	  m_listener(nullptr)
 {
 
 }
 
 Torrent::~Torrent()
 {
+	std::clog << "Destruct torrent" << std::endl;
 	for (auto f : m_files)
 		fclose(f.fp);
 	m_files.clear();
 	m_activeTrackers.clear();
+
+	if (m_listener)
+		m_listener->stop();
+	delete m_listener;
 }
 
 bool Torrent::open(const std::string &fileName, const std::string &downloadDir)
@@ -115,11 +121,12 @@ bool Torrent::open(const std::string &fileName, const std::string &downloadDir)
 		std::string dirName = bencode.unsafe_cast<std::string>(info["name"]);
 		MKDIR(dirName);
 		CHDIR(dirName);
-
 		base = getcwd();	/* += PATH_SEP + dirName  */
-		const boost::any &any = info["files"];
+
 		int64_t begin = 0;
 		size_t index = 0;
+
+		const boost::any &any = info["files"];
 		if (any.type() == typeid(Dictionary)) {
 			const Dictionary &files = bencode.unsafe_cast<Dictionary>(any);
 			for (const auto &pair : files) {
@@ -298,6 +305,81 @@ void Torrent::findCompletedPieces(const File *f, size_t index)
 		std::cerr << m_name << ": insane piece size" << std::endl;
 		return;
 	}
+
+	uint8_t buf[m_pieceLength];
+	if (pieceBegin < f->begin) {
+		size_t bufPos = f->begin - pieceBegin;
+		size_t read = fread(&buf[bufPos], 1, m_pieceLength - bufPos, fp);
+		if (read != m_pieceLength - bufPos)
+			return;
+
+		while (bufPos != 0) {
+			File *cf = &m_files[--index];
+			FILE *fpp = cf->fp;
+
+			if (bufPos > cf->length) {
+				read = fread(&buf[bufPos - f->length], 1, f->length, fpp);
+				if (read != f->length)
+					return;
+
+				bufPos -= f->length;
+			} else {
+				fseek(fpp, f->length - bufPos, SEEK_SET);
+				read = fread(&buf[0], 1, bufPos, fpp);
+				if (read != bufPos)
+					return;
+
+				break;
+			}
+		}
+
+		if (checkPieceHash(&buf[0], m_pieceLength, pieceIndex)) {
+			++m_completedPieces;
+			m_pieces[pieceIndex].done = true;
+		}
+
+		pieceBegin += pieceLength;
+		++pieceIndex;
+	}
+
+	// seek
+	fseek(fp, pieceBegin - f->begin, SEEK_SET);
+
+	size_t i = 0;
+	size_t real = pieceIndex;
+	bool next_exit = false;
+#pragma omp parallel for
+	for (size_t i = pieceIndex; i < m_pieces.size(); ++i) {
+		if (next_exit)
+			continue;
+
+		if (pieceBegin + m_pieceLength >= fileEnd) {
+#pragma omp critical
+			next_exit = true;
+			real = i;
+			continue;
+		}
+
+		size_t read = fread(&buf[0], 1, m_pieceLength, fp);
+		if (checkPieceHash(&buf[0], read, i)) {
+			++m_completedPieces;
+			m_pieces[i].done = true;
+		}
+
+		pieceBegin += m_pieceLength;
+	}
+
+	pieceIndex = real;	// FIXME
+	if (pieceIndex == m_pieces.size() - 1) {
+		pieceLength = pieceSize(pieceIndex);
+		if (fread(&buf[0], 1, pieceLength, fp) != pieceLength)
+			return;
+
+		if (checkPieceHash(&buf[0], pieceLength, pieceIndex)) {
+			++m_completedPieces;
+			m_pieces[pieceIndex].done = true;
+		}
+	}
 }
 
 TrackerQuery Torrent::makeTrackerQuery(TrackerEvent event) const
@@ -315,31 +397,63 @@ TrackerQuery Torrent::makeTrackerQuery(TrackerEvent event) const
 
 Torrent::DownloadError Torrent::download(uint16_t port)
 {
-	size_t piecesNeeded = m_pieces.size();
-	if (m_completedPieces == piecesNeeded)
+	if (isFinished())
 		return DownloadError::AlreadyDownloaded;
 
-	m_startTime = clock();
 	if (!queryTrackers(makeTrackerQuery(TrackerEvent::Started), port))
 		return DownloadError::TrackerQueryFailure;
 
-	while (m_completedPieces != piecesNeeded) {
+	m_listener = new(std::nothrow) Server(port);
+	m_startTime = clock();
+	while (!isFinished()) {
+		m_listener->accept(
+			[this] (Connection *c) {
+				std::clog << "New connection: " << c->getIPString() << std::endl;
+				auto peer = std::make_shared<Peer>(c, this);
+				peer->verify();
+			}
+		);
+
 		for (const TrackerPtr &tracker : m_activeTrackers)
 			if (tracker->timeUp())
 				tracker->query(makeTrackerQuery(TrackerEvent::None));
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 	}
 
-	for (const auto &f : m_files)
-		fclose(f.fp);
-	m_files.clear();
-
-	TrackerEvent event = m_completedPieces == piecesNeeded ? TrackerEvent::Completed : TrackerEvent::Stopped;
+	TrackerEvent event = isFinished() ? TrackerEvent::Completed : TrackerEvent::Stopped;
 	TrackerQuery q = makeTrackerQuery(event);
 	for (const TrackerPtr &tracker : m_activeTrackers)
 		tracker->query(q);
 
+	m_activeTrackers.clear();
 	return event == TrackerEvent::Completed ? DownloadError::Completed : DownloadError::NetworkError;
+}
+
+bool Torrent::seed(uint16_t port)
+{
+	if (!m_listener)
+		m_listener = new(std::nothrow) Server(port);
+
+	if (!queryTrackers(makeTrackerQuery(TrackerEvent::Started), port))
+		return false;
+
+	// Just loop and wait for new connections
+	while (!m_listener->stopped()) {
+		m_listener->accept(
+			[this] (Connection *c) {
+				std::clog << "New connection: " << c->getIPString() << std::endl;
+			//	auto peer = std::make_shared<Peer>(c, this);
+			//	peer->verify();
+			}
+		);
+	}
+
+	TrackerQuery q = makeTrackerQuery(TrackerEvent::Stopped);
+	for (const TrackerPtr &tracker : m_activeTrackers)
+		tracker->query(q);
+
+	m_activeTrackers.clear();
+	return true;
 }
 
 bool Torrent::queryTrackers(const TrackerQuery &query, uint16_t port)
@@ -395,6 +509,8 @@ void Torrent::rawConnectPeers(const uint8_t *peers, size_t size)
 	for (size_t i = 0; i < size; i += 6) {
 		const uint8_t *iport = peers + i;
 		uint32_t ip = isLittleEndian() ? readLE32(iport) : readBE32(iport);
+		if (ip == 0)
+			continue;
 
 		auto it = std::find_if(m_peers.begin(), m_peers.end(),
 				[ip] (const PeerPtr &peer) { return peer->ip() == ip; });
@@ -410,6 +526,9 @@ void Torrent::rawConnectPeers(const uint8_t *peers, size_t size)
 
 void Torrent::connectToPeers(const boost::any &_peers)
 {
+	if (isFinished())
+		return;
+
 	if (_peers.type() == typeid(std::string)) {
 		std::string peers = *boost::unsafe_any_cast<std::string>(&_peers);
 		return rawConnectPeers((const uint8_t *)peers.c_str(), peers.length());
@@ -446,11 +565,6 @@ void Torrent::connectToPeers(const boost::any &_peers)
 	}
 }
 
-void Torrent::addTracker(const std::string &tracker)
-{
-	m_trackers.push_back(tracker);
-}
-
 void Torrent::addPeer(const PeerPtr &peer)
 {
 	m_peers.push_back(peer);
@@ -474,6 +588,20 @@ void Torrent::disconnectPeers()
 	m_peers.clear();
 }
 
+void Torrent::sendBitfield(const PeerPtr &peer)
+{
+	std::vector<uint8_t> bitfield;
+	for (size_t i = 0; i < m_pieces.size(); i += 8) {
+		uint8_t b = 0;
+		for (uint8_t x = 7; x != 0; --x)
+			if (m_pieces[x + i].done)
+				b |= 1 << x;
+		bitfield.push_back(b);
+	}
+
+	peer->sendBitfield(bitfield);
+}
+
 void Torrent::requestPiece(const PeerPtr &peer)
 {
 	size_t index = 0;
@@ -495,7 +623,7 @@ void Torrent::requestPiece(const PeerPtr &peer)
 		}
 	}
 
-	if (priority != std::numeric_limits<int32_t>::max()) {
+	if (priority != std::numeric_limits<int32_t>::max() && !m_pieces[index].done) {
 		++m_pieces[index].priority;
 		peer->sendPieceRequest(index);
 	}	
@@ -503,7 +631,7 @@ void Torrent::requestPiece(const PeerPtr &peer)
 
 void Torrent::handleTrackerError(const TrackerPtr &tracker, const std::string &error)
 {
-	std::cerr << m_name << ": tracker request failed: " << error << std::endl;
+	std::cerr << m_name << ": " << tracker->host() << ":" << tracker->port() << ": tracker request failed: " << error << std::endl;
 }
 
 void Torrent::handlePeerDebug(const PeerPtr &peer, const std::string &msg)
@@ -612,6 +740,12 @@ void Torrent::handleRequestBlock(const PeerPtr &peer, uint32_t index, uint32_t b
 
 	peer->sendPieceBlock(index, begin, block, length);
 	m_uploadedBytes += length;
+}
+
+void Torrent::handleNewPeer(const PeerPtr &peer)
+{
+	sendBitfield(peer);
+	addPeer(peer);
 }
 
 size_t Torrent::computeDownloaded() const

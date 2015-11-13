@@ -27,6 +27,7 @@
 
 #include <boost/any.hpp>
 #include <bencode/bencode.h>
+#include <net/server.h>
 
 #include <vector>
 #include <map>
@@ -60,11 +61,15 @@ public:
 
 	bool open(const std::string& fileName, const std::string &downloadDir);
 	DownloadError download(uint16_t port);
+	bool seed(uint16_t port);
 
+	inline bool isFinished() const { return m_completedPieces == m_pieces.size(); }
 	inline size_t activePeers() const { return m_peers.size(); }
 	inline int64_t totalSize() const { return m_totalSize; }
 	inline int64_t downloadedBytes() const { return m_downloadedBytes; }
 	inline uint32_t uploadedBytes() const { return m_uploadedBytes; }
+	inline size_t totalPieces() const { return m_pieces.size(); }
+	inline size_t completedPieces() const { return m_completedPieces; }
 	inline std::string name() const { return m_name; }
 
 	double eta() const;
@@ -79,25 +84,25 @@ protected:
 	void findCompletedPieces(const struct File *f, size_t index);
 	void rawConnectPeers(const uint8_t *peers, size_t size);
 	void connectToPeers(const boost::any &peers);
+	void sendBitfield(const PeerPtr &peer);
 	void requestPiece(const PeerPtr &peer);
 	size_t computeDownloaded() const;
 	int64_t pieceSize(size_t pieceIndex) const;
 	inline bool pieceDone(size_t pieceIndex) const { return m_pieces[pieceIndex].done; }
 
-	void addTracker(const std::string &tracker);
 	void addPeer(const PeerPtr &peer);
 	void removePeer(const PeerPtr &peer, const std::string &errmsg);
 	void disconnectPeers();
-	inline const uint8_t *peerId() const { return m_peerId; }
-	inline const uint8_t *handshake() const { return m_handshake; }
-	inline size_t totalPieces() const { return m_pieces.size(); }
-	inline size_t completedPieces() const { return m_completedPieces; }
+
+	const uint8_t *peerId() const { return m_peerId; }
+	const uint8_t *handshake() const { return m_handshake; }
 
 	TrackerQuery makeTrackerQuery(TrackerEvent event) const;
 	void handleTrackerError(const TrackerPtr &tracker, const std::string &error);
 	void handlePeerDebug(const PeerPtr &peer, const std::string &msg);
 	void handlePieceCompleted(const PeerPtr &peer, uint32_t index, const DataBuffer<uint8_t> &data);
 	void handleRequestBlock(const PeerPtr &peer, uint32_t index, uint32_t begin, uint32_t length);
+	void handleNewPeer(const PeerPtr &peer);
 
 private:
 	struct Piece {
@@ -120,6 +125,7 @@ private:
 	size_t m_pieceLength;
 	size_t m_totalSize;
 
+	Server *m_listener;
 	VectorType m_trackers;
 	std::string m_name;
 	std::string m_mainTracker;

@@ -54,6 +54,7 @@ class Peer : public std::enable_shared_from_this<Peer>
 
 public:
 	Peer(Torrent *t);
+	Peer(Connection *c, Torrent *t);
 	~Peer();
 
 	inline void setId(const std::string &id) { m_peerId = id; }
@@ -63,10 +64,12 @@ public:
 	void connect(const std::string &ip, const std::string &port);
 
 protected:
+	void verify();
 	void handle(const uint8_t *data, size_t size);
 	void handleMessage(MessageType mType, InputMessage in);
 	void handleError(const std::string &);
 
+	void sendBitfield(const std::vector<uint8_t> &payload);
 	void sendHave(uint32_t index);
 	void sendPieceBlock(uint32_t index, uint32_t begin, uint8_t *block, uint32_t size);
 	void sendPieceRequest(uint32_t index);

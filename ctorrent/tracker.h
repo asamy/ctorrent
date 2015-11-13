@@ -55,6 +55,9 @@ public:
 	{
 	}
 
+	std::string host() const { return m_host; }
+	std::string port() const { return m_port; }
+
 	// Start querying this tracker for peers etc.
 	bool query(const TrackerQuery &request);
 	bool timeUp(void) { return std::chrono::system_clock::now() >= m_timeToNextRequest; }

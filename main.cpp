@@ -38,12 +38,19 @@ static void print_help(const char *p)
 	std::clog << "\t\t--piecesize (-s)		Specify piece size in KB, this will be rounded to the nearest power of two.  Default is 16 KB" << std::endl;
 	std::clog << "\t\t--port (-p)			Not yet fully implemented." << std::endl;
 	std::clog << "\t\t--dldir (-d)			Specify downloads directory." << std::endl;
+	std::clog << "\t\t--noseed (-e)			Do not seed after download has finished." << std::endl;
 	std::clog << "\t\t--torrents (-t) 		Specify torrent file(s)." << std::endl;
 	std::clog << "Example: " << p << " --nodownload --torrents a.torrent b.torrent c.torrent" << std::endl;
 }
 
+static void asio_sighandler(const boost::system::error_code &error, int sig)
+{
+	std::cerr << "asio_sighandler(): received signal " << sig << ": " << error.message() << std::endl;
+}
+
 int main(int argc, char *argv[])
 {
+	bool noseed = false;
 	int startport = 6881;
 	std::string dldir = "Torrents";
 	std::vector<std::string> files;
@@ -57,6 +64,7 @@ int main(int argc, char *argv[])
 		("nodownload,n", "do not download anything, just print info about torrents")
 		("piecesize,s", po::value(&maxRequestSize), "specify piece block size")
 		("dldir,d", po::value(&dldir), "specify downloads directory")
+		("noseed,e", po::value(&noseed), "do not seed after download has finished.")
 		("torrents,t", po::value<std::vector<std::string>>(&files)->required()->multitoken(), "specify torrent file(s)");
 
 	if (argc == 1) {
@@ -97,6 +105,7 @@ int main(int argc, char *argv[])
 	size_t total = files.size();
 	size_t completed = 0;
 	size_t errors = 0;
+	size_t eseed = 0;
 	size_t started = 0;
 
 	Torrent torrents[total];
@@ -107,6 +116,7 @@ int main(int argc, char *argv[])
 
 		try {
 			// yes, it won't throw exception in some cases...  may sound bad but whatever
+			std::clog << "Opening: " << file << std::endl;
 			if (!t->open(file, dldir)) {
 				std::cerr << file << ": corrupted torrent file" << std::endl;
 				++errors;
@@ -123,8 +133,9 @@ int main(int argc, char *argv[])
 			continue;
 
 		++started;
-		threads[i] = std::thread([t, &startport, &completed, &errors]() {
-			Torrent::DownloadError error = t->download(startport++);
+		threads[i] = std::thread([t, &startport, &completed, &errors, &eseed, noseed]() {
+			uint16_t tport = startport++;
+			Torrent::DownloadError error = t->download(tport);
 			switch (error) {
 			case Torrent::DownloadError::Completed:
 				std::clog << t->name() << ": finished download" << std::endl;
@@ -146,6 +157,14 @@ int main(int argc, char *argv[])
 
 			std::clog << t->name() << ": Downloaded: " << bytesToHumanReadable(t->downloadedBytes(), true) << std::endl;
 			std::clog << t->name() << ": Uploaded:   " << bytesToHumanReadable(t->uploadedBytes(),   true) << std::endl;
+
+			if (!noseed
+				&& (error == Torrent::DownloadError::Completed || error == Torrent::DownloadError::AlreadyDownloaded)
+				&& !t->seed(tport))
+			{
+				std::clog << t->name() << ": unable to initiate seeding" << std::endl;
+				++eseed;
+			}
 		});
 		threads[i].detach();
 	}
@@ -165,6 +184,12 @@ int main(int argc, char *argv[])
 			std::clog << "Completed " << completed << "/" << total - errors << " (" << errors << " errnoeous torrents)" << std::endl;
 			last = completed;
 		}
+	}
+
+	if (!noseed) {
+		std::clog << "Now seeding" << std::endl;
+		while (eseed != total)
+			Connection::poll();
 	}
 
 	return 0;

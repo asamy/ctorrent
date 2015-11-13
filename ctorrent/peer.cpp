@@ -31,6 +31,13 @@ Peer::Peer(Torrent *torrent)
 	m_state = PS_AmChoked | PS_PeerChoked;
 }
 
+Peer::Peer(Connection *c, Torrent *t)
+	: m_torrent(t),
+	  m_conn(c)
+{
+	m_state = PS_AmChoked | PS_PeerChoked;
+}
+
 Peer::~Peer()
 {
 	delete m_conn;
@@ -63,13 +70,37 @@ void Peer::connect(const std::string &ip, const std::string &port)
 
 					std::string peerId((const char *)&handshake[48], 20);
 					if (!m_peerId.empty() && peerId != m_peerId)
-						return handleError("unverified");
+						return handleError("peer id mismatch: unverified");
 
 					m_peerId = peerId;
 					m_torrent->addPeer(shared_from_this());
 					m_conn->read(4, std::bind(&Peer::handle, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 				}
 			);
+		}
+	);
+}
+
+void Peer::verify()
+{
+	const uint8_t *m_handshake = m_torrent->handshake();
+	m_conn->setErrorCallback(std::bind(&Peer::handleError, shared_from_this(), std::placeholders::_1));
+	m_conn->read(68,
+		[this, m_handshake] (const uint8_t *handshake, size_t size)
+		{
+			if (size != 68
+				|| (handshake[0] != 0x13 && memcmp(&handshake[1], "BitTorrent protocol", 19) != 0)
+				|| memcmp(&handshake[28], &m_handshake[28], 20) != 0)
+				return handleError("info hash/protocol type mismatch");
+
+			std::string peerId((const char *)&handshake[48], 20);
+			if (!m_peerId.empty() && peerId != m_peerId)
+				return handleError("unverified");
+
+			m_peerId = peerId;
+			m_conn->write(m_handshake, 68);
+			m_torrent->handleNewPeer(shared_from_this());
+			m_conn->read(4, std::bind(&Peer::handle, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 		}
 	);
 }
@@ -195,10 +226,10 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 				pushPiece(index++);
 			}
 		}
-
 #endif
 
-		m_torrent->requestPiece(shared_from_this());
+		if (!m_torrent->isFinished())
+			m_torrent->requestPiece(shared_from_this());
 		break;
 	}
 	case MT_Request:
@@ -307,6 +338,16 @@ void Peer::handleError(const std::string &errmsg)
 	m_conn->close(false);	// close but don't call me again
 }
 
+void Peer::sendBitfield(const std::vector<uint8_t> &payload)
+{
+	OutputMessage out(ByteOrder::BigEndian, 5 + payload.size());
+	out << 1UL + payload.size();
+	out << (uint8_t)MT_Bitfield;
+	out.addBytes(&payload[0], payload.size());
+
+	m_conn->write(out);
+}
+
 void Peer::sendHave(uint32_t index)
 {
 	if (isLocalChoked())
@@ -322,8 +363,8 @@ void Peer::sendHave(uint32_t index)
 
 void Peer::sendPieceBlock(uint32_t index, uint32_t begin, uint8_t *block, uint32_t length)
 {
-	OutputMessage out(ByteOrder::BigEndian, 13);
-	out << 9 + length;	// length
+	OutputMessage out(ByteOrder::BigEndian, 13 + length);
+	out << 9UL + length;	// length
 	out << (uint8_t)MT_PieceBlock;
 	out << index;
 	out << begin;
