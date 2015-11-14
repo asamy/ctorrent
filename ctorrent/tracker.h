@@ -43,7 +43,7 @@ struct TrackerQuery {
 };
 
 class Torrent;
-class Tracker : public std::enable_shared_from_this<Tracker>
+class Tracker
 {
 public:
 	Tracker(Torrent *torrent, const std::string &host, const std::string &port, const std::string &proto, uint16_t tport)
@@ -78,7 +78,6 @@ private:
 
 	friend class Torrent;
 };
-typedef std::shared_ptr<Tracker> TrackerPtr;
 
 #endif
 

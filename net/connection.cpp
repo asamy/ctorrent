@@ -35,7 +35,7 @@ Connection::Connection() :
 
 Connection::~Connection()
 {
-	close(false);
+	m_delayedWriteTimer.cancel();
 }
 
 void Connection::poll()
@@ -118,9 +118,9 @@ void Connection::read(size_t bytes, const ReadCallback &rc)
 	);
 }
 
-void Connection::internalWrite(const boost::system::error_code& e)
+void Connection::internalWrite(const boost::system::error_code &e)
 {
-	if (e == asio::error::operation_aborted)
+	if (e == asio::error::operation_aborted || !m_outputStream)
 		return;
 
 	std::shared_ptr<asio::streambuf> outputStream = m_outputStream;
@@ -134,7 +134,6 @@ void Connection::internalWrite(const boost::system::error_code& e)
 
 void Connection::handleWrite(const boost::system::error_code &e, size_t bytes, std::shared_ptr<asio::streambuf> outputStream)
 {
-	m_delayedWriteTimer.cancel();
 	if (e == asio::error::operation_aborted)
 		return;
 
@@ -183,9 +182,6 @@ void Connection::handleError(const boost::system::error_code& error)
 
 	if (m_eh)
 		m_eh(error.message());
-
-	if (isConnected())		// User is free to close the connection before us
-		close();
 }
 
 std::string Connection::getIPString() const

@@ -41,7 +41,7 @@ bool Tracker::httpRequest(const TrackerQuery &r)
 	asio::ip::tcp::resolver::iterator endpoint = resolver.resolve(query, error);
 	asio::ip::tcp::resolver::iterator end;
 	if (error) {
-		m_torrent->handleTrackerError(shared_from_this(), "Unable to resolve host: " + error.message());
+		m_torrent->handleTrackerError(this, "Unable to resolve host: " + error.message());
 		return false;
 	}
 
@@ -51,7 +51,7 @@ bool Tracker::httpRequest(const TrackerQuery &r)
 		socket.connect(*endpoint++, error);
 	} while (error && endpoint != end);
 	if (error) {
-		m_torrent->handleTrackerError(shared_from_this(), "Failed to connect: " + error.message());
+		m_torrent->handleTrackerError(this, "Failed to connect: " + error.message());
 		return false;
 	}
 
@@ -81,7 +81,7 @@ bool Tracker::httpRequest(const TrackerQuery &r)
 	try {
 		asio::read_until(socket, response, "\r\n");
 	} catch (const std::exception &e) {
-		m_torrent->handleTrackerError(shared_from_this(), "Unable to read data: " + std::string(e.what()));
+		m_torrent->handleTrackerError(this, "Unable to read data: " + std::string(e.what()));
 		return false;
 	}
 
@@ -90,7 +90,7 @@ bool Tracker::httpRequest(const TrackerQuery &r)
 	rbuf >> httpVersion;
 
 	if (httpVersion.substr(0, 5) != "HTTP/") {
-		m_torrent->handleTrackerError(shared_from_this(), "Tracker send an invalid HTTP version response");
+		m_torrent->handleTrackerError(this, "Tracker send an invalid HTTP version response");
 		return false;
 	}
 
@@ -99,14 +99,14 @@ bool Tracker::httpRequest(const TrackerQuery &r)
 	if (status != 200) {
 		std::ostringstream os;
 		os << "Tracker failed to process our request: " << status;
-		m_torrent->handleTrackerError(shared_from_this(), os.str());
+		m_torrent->handleTrackerError(this, os.str());
 		return false;
 	}
 
 	try {
 		asio::read_until(socket, response, "\r\n\r\n");
 	} catch (const std::exception &e) {
-		m_torrent->handleTrackerError(shared_from_this(), "Unable to read data: " + std::string(e.what()));
+		m_torrent->handleTrackerError(this, "Unable to read data: " + std::string(e.what()));
 		return false;
 	}
 	socket.close();
@@ -115,7 +115,7 @@ bool Tracker::httpRequest(const TrackerQuery &r)
 	std::string header;
 	while (std::getline(rbuf, header) && header != "\r");
 	if (!rbuf) {
-		m_torrent->handleTrackerError(shared_from_this(), "Unable to get to tracker response body.");
+		m_torrent->handleTrackerError(this, "Unable to get to tracker response body.");
 		return false;
 	}
 
@@ -125,12 +125,12 @@ bool Tracker::httpRequest(const TrackerQuery &r)
 	Bencode bencode;
 	Dictionary dict = bencode.decode(os.str().c_str(), os.str().length());
 	if (dict.empty()) {
-		m_torrent->handleTrackerError(shared_from_this(), "Unable to decode tracker response body");
+		m_torrent->handleTrackerError(this, "Unable to decode tracker response body");
 		return false;
 	}
 
 	if (dict.count("failure reason") != 0) {
-		m_torrent->handleTrackerError(shared_from_this(), Bencode::cast<std::string>(dict["failure reason"]));
+		m_torrent->handleTrackerError(this, Bencode::cast<std::string>(dict["failure reason"]));
 		return false;
 	}
 
@@ -148,7 +148,7 @@ bool Tracker::udpRequest(const TrackerQuery &r)
 
 	asio::ip::udp::resolver::iterator ep_iter = resolver.resolve(query, error);
 	if (error) {
-		m_torrent->handleTrackerError(shared_from_this(), "Unable to resolve host: " + error.message());
+		m_torrent->handleTrackerError(this, "Unable to resolve host: " + error.message());
 		return false;
 	}
 
@@ -168,26 +168,26 @@ bool Tracker::udpRequest(const TrackerQuery &r)
 	writeBE32(&buf[12], tx);
 
 	if (socket.send_to(asio::buffer(&buf[0], 16), endpoint) != 16) {
-		m_torrent->handleTrackerError(shared_from_this(), "Failed to initiate UDP transaction");
+		m_torrent->handleTrackerError(this, "Failed to initiate UDP transaction");
 		socket.close();
 		return false;
 	}
 
 	size_t len = socket.receive_from(asio::buffer(buf, 16), r_endpoint);
 	if (len != 16) {
-		m_torrent->handleTrackerError(shared_from_this(), "failed to receive data");
+		m_torrent->handleTrackerError(this, "failed to receive data");
 		socket.close();
 		return false;
 	}
 
 	if (readBE32(&buf[0]) != 0) {
-		m_torrent->handleTrackerError(shared_from_this(), "action mismatch");
+		m_torrent->handleTrackerError(this, "action mismatch");
 		socket.close();
 		return false;
 	}
 
 	if (readBE32(&buf[4]) != tx) {
-		m_torrent->handleTrackerError(shared_from_this(), "transaction id mismatch");
+		m_torrent->handleTrackerError(this, "transaction id mismatch");
 		socket.close();
 		return false;
 	}
@@ -212,7 +212,7 @@ bool Tracker::udpRequest(const TrackerQuery &r)
 	writeBE16(&re[96], m_tport);
 
 	if (socket.send_to(asio::buffer(&re[0], sizeof(re)), endpoint) != sizeof(re)) {
-		m_torrent->handleTrackerError(shared_from_this(), "failed to send announce data");
+		m_torrent->handleTrackerError(this, "failed to send announce data");
 		socket.close();
 		return false;
 	}
@@ -221,17 +221,17 @@ bool Tracker::udpRequest(const TrackerQuery &r)
 	len = socket.receive_from(asio::buffer(response, sizeof(response)), r_endpoint);
 	socket.close();
 	if (len < 20) {
-		m_torrent->handleTrackerError(shared_from_this(), "expected at least 20 bytes response");
+		m_torrent->handleTrackerError(this, "expected at least 20 bytes response");
 		return false;
 	}
 
 	if (readBE32(&response[0]) != 1) {
-		m_torrent->handleTrackerError(shared_from_this(), "2: action mismatch");
+		m_torrent->handleTrackerError(this, "2: action mismatch");
 		return false;
 	}
 
 	if (readBE32(&response[4]) != tx) {
-		m_torrent->handleTrackerError(shared_from_this(), "2: transaction mismatch");
+		m_torrent->handleTrackerError(this, "2: transaction mismatch");
 		return false;
 	}
 
