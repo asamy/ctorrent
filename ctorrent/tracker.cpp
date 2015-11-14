@@ -26,10 +26,15 @@
 
 bool Tracker::query(const TrackerQuery &req)
 {
+	bool ret = false;
 	if (m_prot == "http")
-		return httpRequest(req);
+		ret = httpRequest(req);
+	else
+		ret = udpRequest(req);
 
-	return udpRequest(req);
+	if (!ret)
+		m_timeToNextRequest = std::chrono::system_clock::now() + std::chrono::milliseconds(100);
+	return ret;
 }
 
 bool Tracker::httpRequest(const TrackerQuery &r)
