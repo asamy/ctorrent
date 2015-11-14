@@ -317,13 +317,13 @@ void Torrent::findCompletedPieces(const File *f, size_t index)
 			FILE *fpp = cf->fp;
 
 			if (bufPos > cf->length) {
-				read = fread(&buf[bufPos - f->length], 1, f->length, fpp);
-				if (read != f->length)
+				read = fread(&buf[bufPos - cf->length], 1, cf->length, fpp);
+				if (read != cf->length)
 					return;
 
-				bufPos -= f->length;
+				bufPos -= cf->length;
 			} else {
-				fseek(fpp, f->length - bufPos, SEEK_SET);
+				fseek(fpp, cf->length - bufPos, SEEK_SET);
 				read = fread(&buf[0], 1, bufPos, fpp);
 				if (read != bufPos)
 					return;
