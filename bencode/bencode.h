@@ -27,6 +27,9 @@
 #include <string>
 #include <map>
 #include <vector>
+#ifdef _DEBUG
+#include <iostream>
+#endif
 
 #include <util/serializer.h>
 #include <util/databuffer.h>
@@ -46,12 +49,14 @@ public:
 	template <typename T>
 	static inline T cast(const boost::any &value)
 	{
-		return boost::any_cast<T>(value);
-	}
-	template <typename T>
-	static inline T unsafe_cast(const boost::any &value)
-	{
-		return *boost::unsafe_any_cast<T>(&value);
+		try {
+			return boost::any_cast<T>(value);
+		} catch (...) {
+#ifdef _DEBUG
+			std::cerr << "Bencode::cast<" << typeid(T).name() << ">: unable to cast from: " << value.type().name() << std::endl;
+#endif
+			return T();
+		}
 	}
 
 	size_t pos() const { return m_pos; }

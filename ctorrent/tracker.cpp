@@ -130,12 +130,12 @@ bool Tracker::httpRequest(const TrackerQuery &r)
 	}
 
 	if (dict.count("failure reason") != 0) {
-		m_torrent->handleTrackerError(shared_from_this(), bencode.unsafe_cast<std::string>(dict["failure reason"]));
+		m_torrent->handleTrackerError(shared_from_this(), Bencode::cast<std::string>(dict["failure reason"]));
 		return false;
 	}
 
 	m_timeToNextRequest = std::chrono::system_clock::now()
-				+ std::chrono::milliseconds(bencode.unsafe_cast<int64_t>(dict["interval"]));
+				+ std::chrono::milliseconds(Bencode::cast<int64_t>(dict["interval"]));
 	m_torrent->connectToPeers(dict["peers"]);
 	return true;
 }

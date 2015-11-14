@@ -114,16 +114,9 @@ int main(int argc, char *argv[])
 		std::string file = files[i];
 		Torrent *t = &torrents[i];
 
-		try {
-			// yes, it won't throw exception in some cases...  may sound bad but whatever
-			std::clog << "Opening: " << file << std::endl;
-			if (!t->open(file, dldir)) {
-				std::cerr << file << ": corrupted torrent file" << std::endl;
-				++errors;
-				continue;
-			}
-		} catch (const std::exception &e) {
-			std::cerr << file << ": failed to load torrent file: " << e.what() << std::endl;
+		std::clog << "Opening: " << file << std::endl;
+		if (!t->open(file, dldir)) {
+			std::cerr << file << ": corrupted torrent file" << std::endl;
 			++errors;
 			continue;
 		}

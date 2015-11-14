@@ -65,13 +65,13 @@ bool Torrent::open(const std::string &fileName, const std::string &downloadDir)
 		return false;
 	}
 
-	m_mainTracker = bencode.unsafe_cast<std::string>(dict["announce"]);
+	m_mainTracker = Bencode::cast<std::string>(dict["announce"]);
 	if (dict.count("comment"))
-		m_comment = bencode.unsafe_cast<std::string>(dict["comment"]);
+		m_comment = Bencode::cast<std::string>(dict["comment"]);
 	if (dict.count("announce-list"))
-		m_trackers = bencode.unsafe_cast<VectorType>(dict["announce-list"]);
+		m_trackers = Bencode::cast<VectorType>(dict["announce-list"]);
 
-	Dictionary info = bencode.unsafe_cast<Dictionary>(dict["info"]);
+	Dictionary info = Bencode::cast<Dictionary>(dict["info"]);
 	size_t pos = bencode.pos();
 	bencode.encode(info);
 
@@ -100,10 +100,10 @@ bool Torrent::open(const std::string &fileName, const std::string &downloadDir)
 	for (size_t i = 8; i < 20; ++i)
 		m_handshake[56 + i] = m_peerId[i] = random(generator);
 
-	m_name = bencode.unsafe_cast<std::string>(info["name"]);
-	m_pieceLength = bencode.unsafe_cast<int64_t>(info["piece length"]);
+	m_name = Bencode::cast<std::string>(info["name"]);
+	m_pieceLength = Bencode::cast<int64_t>(info["piece length"]);
 
-	std::string pieces = bencode.unsafe_cast<std::string>(info["pieces"]);
+	std::string pieces = Bencode::cast<std::string>(info["pieces"]);
 	for (size_t i = 0; i < pieces.size(); i += 20) {
 		Piece piece;
 		piece.done = false;
@@ -117,7 +117,7 @@ bool Torrent::open(const std::string &fileName, const std::string &downloadDir)
 
 	std::string base = getcwd();
 	if (info.count("files") > 0) {
-		std::string dirName = bencode.unsafe_cast<std::string>(info["name"]);
+		std::string dirName = Bencode::cast<std::string>(info["name"]);
 		MKDIR(dirName);
 		CHDIR(dirName);
 		base = getcwd();	/* += PATH_SEP + dirName  */
@@ -127,19 +127,19 @@ bool Torrent::open(const std::string &fileName, const std::string &downloadDir)
 
 		const boost::any &any = info["files"];
 		if (any.type() == typeid(Dictionary)) {
-			const Dictionary &files = bencode.unsafe_cast<Dictionary>(any);
+			const Dictionary &files = Bencode::cast<Dictionary>(any);
 			for (const auto &pair : files) {
-				Dictionary v = bencode.unsafe_cast<Dictionary>(pair.second);
-				VectorType pathList = bencode.unsafe_cast<VectorType>(v["path"]);
+				Dictionary v = Bencode::cast<Dictionary>(pair.second);
+				VectorType pathList = Bencode::cast<VectorType>(v["path"]);
 	
 				if (!parseFile(std::move(v), std::move(pathList), index, begin))
 					return false;
 			}
 		} else if (any.type() == typeid(VectorType)) {
-			const VectorType &files = bencode.unsafe_cast<VectorType>(any);
+			const VectorType &files = Bencode::cast<VectorType>(any);
 			for (const auto &f : files) {
-				Dictionary v = bencode.unsafe_cast<Dictionary>(f);
-				VectorType pathList = bencode.unsafe_cast<VectorType>(v["path"]);
+				Dictionary v = Bencode::cast<Dictionary>(f);
+				VectorType pathList = Bencode::cast<VectorType>(v["path"]);
 
 				if (!parseFile(std::move(v), std::move(pathList), index, begin))
 					return false;
@@ -157,7 +157,7 @@ bool Torrent::open(const std::string &fileName, const std::string &downloadDir)
 			return false;
 		}
 
-		int64_t length = bencode.unsafe_cast<int64_t>(info["length"]);
+		int64_t length = Bencode::cast<int64_t>(info["length"]);
 		File file = {
 			.path = m_name.c_str(),
 			.fp = nullptr,
@@ -196,7 +196,7 @@ bool Torrent::parseFile(Dictionary &&v, VectorType &&pathList, size_t &index, in
 	std::string path;
 
 	for (auto it = pathList.begin();; ++it) {
-		const std::string &s = Bencode::unsafe_cast<std::string>(*it);
+		const std::string &s = Bencode::cast<std::string>(*it);
 		if (it == pathList.end() - 1) {
 			path += s;
 			break;
@@ -207,7 +207,7 @@ bool Torrent::parseFile(Dictionary &&v, VectorType &&pathList, size_t &index, in
 			MKDIR(path);
 	}
 
-	const int64_t length = Bencode::unsafe_cast<int64_t>(v["length"]);
+	const int64_t length = Bencode::cast<int64_t>(v["length"]);
 	File file = {
 		.path = path,
 		.fp = nullptr,
@@ -468,9 +468,9 @@ bool Torrent::queryTrackers(const TrackerQuery &query, uint16_t port)
 		if (s.type() == typeid(VectorType)) {
 			const VectorType &vType = *boost::unsafe_any_cast<VectorType>(&s);
 			for (const boost::any &announce : vType)
-				alt = queryTracker(Bencode::unsafe_cast<std::string>(&announce), query, port);
+				alt = queryTracker(Bencode::cast<std::string>(&announce), query, port);
 		} else if (s.type() == typeid(std::string))
-			alt = queryTracker(Bencode::unsafe_cast<std::string>(&s), query, port);
+			alt = queryTracker(Bencode::cast<std::string>(&s), query, port);
 		else
 			std::cerr << m_name << ": warning: unkown tracker type: " << s.type().name() << std::endl;
 	}
