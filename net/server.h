@@ -25,7 +25,7 @@
 #include "connection.h"
 
 class Server {
-	typedef std::function<void (Connection *)> Acceptor;
+	typedef std::function<void (const ConnectionPtr &)> Acceptor;
 public:
 	Server(uint16_t port);
 	~Server();

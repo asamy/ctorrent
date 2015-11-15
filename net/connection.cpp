@@ -35,7 +35,12 @@ Connection::Connection() :
 
 Connection::~Connection()
 {
+	boost::system::error_code ec;
+	m_socket.cancel(ec);
+
 	m_delayedWriteTimer.cancel();
+	if (m_socket.is_open())
+		m_socket.close();
 }
 
 void Connection::poll()
@@ -51,7 +56,7 @@ void Connection::connect(const std::string &host, const std::string &port, const
 	m_cb = cb;
 	m_resolver.async_resolve(
 		query,
-		std::bind(&Connection::handleResolve, this, std::placeholders::_1, std::placeholders::_2)
+		std::bind(&Connection::handleResolve, shared_from_this(), std::placeholders::_1, std::placeholders::_2)
 	);
 }
 
@@ -83,15 +88,15 @@ void Connection::write(const uint8_t *bytes, size_t size)
 		} else
 			m_outputStream = std::shared_ptr<asio::streambuf>(new asio::streambuf);
 		g_connectionLock.unlock();
+
+		m_delayedWriteTimer.cancel();
+		m_delayedWriteTimer.expires_from_now(boost::posix_time::milliseconds(10));
+		m_delayedWriteTimer.async_wait(std::bind(&Connection::internalWrite, shared_from_this(), std::placeholders::_1));
 	}
 
 	std::ostream os(m_outputStream.get());
 	os.write((const char *)bytes, size);
 	os.flush();
-
-	m_delayedWriteTimer.cancel();
-	m_delayedWriteTimer.expires_from_now(boost::posix_time::milliseconds(10));
-	m_delayedWriteTimer.async_wait(std::bind(&Connection::internalWrite, this, std::placeholders::_1));
 }
 
 void Connection::read_partial(size_t bytes, const ReadCallback &rc)
@@ -102,7 +107,7 @@ void Connection::read_partial(size_t bytes, const ReadCallback &rc)
 	m_rc = rc;
 	m_socket.async_read_some(
 		asio::buffer(m_inputStream.prepare(bytes)),
-		std::bind(&Connection::handleRead, this, std::placeholders::_1, std::placeholders::_2)
+		std::bind(&Connection::handleRead, shared_from_this(), std::placeholders::_1, std::placeholders::_2)
 	);
 }
 
@@ -114,13 +119,13 @@ void Connection::read(size_t bytes, const ReadCallback &rc)
 	m_rc = rc;
 	asio::async_read(
 		m_socket, asio::buffer(m_inputStream.prepare(bytes)),
-		std::bind(&Connection::handleRead, this, std::placeholders::_1, std::placeholders::_2)
+		std::bind(&Connection::handleRead, shared_from_this(), std::placeholders::_1, std::placeholders::_2)
 	);
 }
 
 void Connection::internalWrite(const boost::system::error_code &e)
 {
-	if (e == asio::error::operation_aborted || !m_outputStream)
+	if (e == asio::error::operation_aborted)
 		return;
 
 	std::shared_ptr<asio::streambuf> outputStream = m_outputStream;
@@ -128,7 +133,7 @@ void Connection::internalWrite(const boost::system::error_code &e)
 
 	asio::async_write(
 		m_socket, *outputStream,
-		std::bind(&Connection::handleWrite, this, std::placeholders::_1, std::placeholders::_2, outputStream)
+		std::bind(&Connection::handleWrite, shared_from_this(), std::placeholders::_1, std::placeholders::_2, outputStream)
 	);
 }
 
@@ -164,7 +169,7 @@ void Connection::handleResolve(
 	if (e)
 		return handleError(e);
 
-	m_socket.async_connect(*endpoint, std::bind(&Connection::handleConnect, this, std::placeholders::_1));
+	m_socket.async_connect(*endpoint, std::bind(&Connection::handleConnect, shared_from_this(), std::placeholders::_1));
 }
 
 void Connection::handleConnect(const boost::system::error_code &e)

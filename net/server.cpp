@@ -42,13 +42,11 @@ void Server::stop()
 
 void Server::accept(const Acceptor &ac)
 {
-	Connection *conn = new(std::nothrow) Connection();
+	ConnectionPtr conn(new Connection());
 	m_acceptor.async_accept(conn->m_socket,
 		[=] (const boost::system::error_code &error) {
 			if (!error)
 				return ac(conn);
-
-			delete conn;
 		}
 	);
 }

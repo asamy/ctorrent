@@ -41,7 +41,7 @@
 
 namespace asio = boost::asio;
 
-class Connection
+class Connection : public std::enable_shared_from_this<Connection>
 {
 	typedef std::function<void(const uint8_t *, size_t)> ReadCallback;
 	typedef std::function<void()> ConnectCallback;
@@ -90,6 +90,8 @@ private:
 
 	friend class Server;
 };
+typedef std::shared_ptr<Connection> ConnectionPtr;
+
 extern asio::io_service g_service;
 
 #endif

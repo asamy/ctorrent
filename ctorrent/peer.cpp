@@ -25,13 +25,13 @@
 #include <iostream>
 
 Peer::Peer(Torrent *torrent)
-	: m_torrent(torrent)
+	: m_torrent(torrent),
+	  m_conn(new Connection())
 {
-	m_conn = new Connection();
 	m_state = PS_AmChoked | PS_PeerChoked;
 }
 
-Peer::Peer(Connection *c, Torrent *t)
+Peer::Peer(const ConnectionPtr &c, Torrent *t)
 	: m_torrent(t),
 	  m_conn(c)
 {
@@ -40,7 +40,6 @@ Peer::Peer(Connection *c, Torrent *t)
 
 Peer::~Peer()
 {
-	delete m_conn;
 	for (Piece *p : m_queue)
 		delete p;
 	m_queue.clear();
@@ -48,14 +47,13 @@ Peer::~Peer()
 
 void Peer::disconnect()
 {
-	m_torrent->removePeer(this, "disconnect called");
 	m_conn->close(false);
-	delete this;
+	m_conn->setErrorCallback(nullptr);	// deref
 }
 
 void Peer::connect(const std::string &ip, const std::string &port)
 {
-	m_conn->setErrorCallback(std::bind(&Peer::handleError, this, std::placeholders::_1));
+	m_conn->setErrorCallback(std::bind(&Peer::handleError, shared_from_this(), std::placeholders::_1));
 	m_conn->connect(ip, port,
 		[this] ()
 		{
@@ -74,9 +72,9 @@ void Peer::connect(const std::string &ip, const std::string &port)
 						return handleError("peer id mismatch: unverified");
 
 					m_peerId = peerId;
-					m_torrent->addPeer(this);
-					m_torrent->sendBitfield(this);
-					m_conn->read(4, std::bind(&Peer::handle, this, std::placeholders::_1, std::placeholders::_2));
+					m_torrent->addPeer(shared_from_this());
+					m_torrent->sendBitfield(shared_from_this());
+					m_conn->read(4, std::bind(&Peer::handle, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 				}
 			);
 		}
@@ -86,7 +84,7 @@ void Peer::connect(const std::string &ip, const std::string &port)
 void Peer::verify()
 {
 	const uint8_t *m_handshake = m_torrent->handshake();
-	m_conn->setErrorCallback(std::bind(&Peer::handleError, this, std::placeholders::_1));
+	m_conn->setErrorCallback(std::bind(&Peer::handleError, shared_from_this(), std::placeholders::_1));
 	m_conn->read(68,
 		[this, m_handshake] (const uint8_t *handshake, size_t size)
 		{
@@ -101,8 +99,8 @@ void Peer::verify()
 
 			m_peerId = peerId;
 			m_conn->write(m_handshake, 68);
-			m_torrent->handleNewPeer(this);
-			m_conn->read(4, std::bind(&Peer::handle, this, std::placeholders::_1, std::placeholders::_2));
+			m_torrent->handleNewPeer(shared_from_this());
+			m_conn->read(4, std::bind(&Peer::handle, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 		}
 	);
 }
@@ -115,7 +113,7 @@ void Peer::handle(const uint8_t *data, size_t size)
 	uint32_t length = readBE32(data);
 	switch (length) {
 	case 0: // Keep alive
-		return m_conn->read(4, std::bind(&Peer::handle, this, std::placeholders::_1, std::placeholders::_2));
+		return m_conn->read(4, std::bind(&Peer::handle, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 	default:
 		m_conn->read(length,
 			[this] (const uint8_t *data, size_t size)
@@ -136,7 +134,7 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 		if (payloadSize != 0)
 			return handleError("invalid choke-message size");
 
-		m_torrent->handlePeerDebug(this, "choke");
+		m_torrent->handlePeerDebug(shared_from_this(), "choke");
 		m_state |= PS_PeerChoked;
 		break;
 	case MT_UnChoke:
@@ -144,7 +142,7 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 			return handleError("invalid unchoke-message size");
 
 		m_state &= ~PS_PeerChoked;		
-		m_torrent->handlePeerDebug(this, "unchoke");
+		m_torrent->handlePeerDebug(shared_from_this(), "unchoke");
 
 		for (Piece *piece : m_queue)
 			requestPiece(piece->index);
@@ -154,7 +152,7 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 		if (payloadSize != 0)
 			return handleError("invalid interested-message size");
 
-		m_torrent->handlePeerDebug(this, "interested");
+		m_torrent->handlePeerDebug(shared_from_this(), "interested");
 		m_state |= PS_PeerInterested;
 
 		if (isLocalChoked()) {
@@ -170,7 +168,7 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 		if (payloadSize != 0)
 			return handleError("invalid not-interested-message size");
 
-		m_torrent->handlePeerDebug(this, "not interested");
+		m_torrent->handlePeerDebug(shared_from_this(), "not interested");
 		m_state &= ~PS_PeerInterested;
 		break;
 	case MT_Have:
@@ -188,7 +186,7 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 		if (payloadSize < 1)
 			return handleError("invalid bitfield-message size");
 
-		m_torrent->handlePeerDebug(this, "bit field");
+		m_torrent->handlePeerDebug(shared_from_this(), "bit field");
 		uint8_t *buf = in.getBuffer();
 #if 0	// FIXME: This is broken for bytes that start with 4 zero bits.
 		for (size_t i = 0, index = 0; i < payloadSize; ++i) {
@@ -231,7 +229,7 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 #endif
 
 		if (!m_torrent->isFinished())
-			m_torrent->requestPiece(this);
+			m_torrent->requestPiece(shared_from_this());
 		break;
 	}
 	case MT_Request:
@@ -253,8 +251,8 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 		if (length > maxRequestSize)
 			return handleError("peer requested piece of size " + bytesToHumanReadable(length, true) + " which is beyond our max request size");
 
-		m_torrent->handlePeerDebug(this, "requested piece block of length " + bytesToHumanReadable(length, true));
-		m_torrent->handleRequestBlock(this, index, begin, length);
+		m_torrent->handlePeerDebug(shared_from_this(), "requested piece block of length " + bytesToHumanReadable(length, true));
+		m_torrent->handleRequestBlock(shared_from_this(), index, begin, length);
 		break;
 	}
 	case MT_PieceBlock:
@@ -281,7 +279,7 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 			return handleError("received too big block index");
 
 		if (m_torrent->pieceDone(index)) {
-			m_torrent->handlePeerDebug(this, "cancelling " + std::to_string(index));
+			m_torrent->handlePeerDebug(shared_from_this(), "cancelling " + std::to_string(index));
 			sendCancelRequest(piece);
 			m_queue.erase(it);
 			delete piece;
@@ -294,16 +292,21 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 				pieceData.reserve(piece->numBlocks * maxRequestSize);	// just a prediction could be bit less
 				for (size_t x = 0; x < piece->numBlocks; ++x)
 					for (size_t y = 0; y < piece->blocks[x].size; ++y)
-						pieceData.add(piece->blocks[x].data[y]);
+						pieceData.add_unchecked(piece->blocks[x].data[y]);
 
-				m_torrent->handlePieceCompleted(this, index, pieceData);
+				bool cont = m_torrent->handlePieceCompleted(shared_from_this(), index, pieceData);
 				m_queue.erase(it);
 				delete piece;
 
-				// We have to do this here, if we do it inside of handlePieceCompleted
-				// m_queue will fail us due to sendPieceRequest changing position
-				if (m_torrent->completedPieces() != m_torrent->totalPieces())
-					m_torrent->requestPiece(this);
+				if (cont) {
+					// We have to do this here, if we do it inside of handlePieceCompleted
+					// m_queue will fail us due to sendPieceRequest changing position
+					if (m_torrent->completedPieces() != m_torrent->totalPieces())
+						m_torrent->requestPiece(shared_from_this());
+				} else {
+					// sending malicious pieces?
+					return disconnect();
+				}
 			}
 		}
 
@@ -319,7 +322,7 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 		in >> begin;
 		in >> length;
 
-		m_torrent->handlePeerDebug(this, "cancel");
+		m_torrent->handlePeerDebug(shared_from_this(), "cancel");
 		break;
 	}
 	case MT_Port:
@@ -331,12 +334,13 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 		break;
 	}
 
-	m_conn->read(4, std::bind(&Peer::handle, this, std::placeholders::_1, std::placeholders::_2));
+	m_conn->read(4, std::bind(&Peer::handle, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 }
 
 void Peer::handleError(const std::string &errmsg)
 {
-	m_torrent->removePeer(this, errmsg);
+	m_torrent->removePeer(shared_from_this(), errmsg);
+	disconnect();
 }
 
 void Peer::sendBitfield(const std::vector<uint8_t> &payload)

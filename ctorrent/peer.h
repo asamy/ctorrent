@@ -29,7 +29,7 @@
 #include <vector>
 
 class Torrent;
-class Peer
+class Peer : public std::enable_shared_from_this<Peer>
 {
 	struct Piece;
 	enum State : uint8_t {
@@ -54,7 +54,7 @@ class Peer
 
 public:
 	Peer(Torrent *t);
-	Peer(Connection *c, Torrent *t);
+	Peer(const ConnectionPtr &c, Torrent *t);
 	~Peer();
 
 	inline void setId(const std::string &id) { m_peerId = id; }
@@ -112,10 +112,11 @@ private:
 	std::string m_peerId;
 	uint8_t m_state;
 	Torrent *m_torrent;
-	Connection *m_conn;
+	ConnectionPtr m_conn;
 
 	friend class Torrent;
 };
+typedef std::shared_ptr<Peer> PeerPtr;
 
 #endif
 

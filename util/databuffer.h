@@ -77,10 +77,15 @@ public:
 		m_size = n;
 	}
 
-	inline void add(const T& v)
+	inline void add(const T &v)
 	{
 		grow(m_size + 1);
 		m_buffer[m_size-1] = v;
+	}
+
+	inline void add_unchecked(const T &v)
+	{
+		m_buffer[m_size++] = v;
 	}
 
 	inline DataBuffer &operator<<(const T &t)

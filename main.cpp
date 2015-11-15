@@ -43,11 +43,6 @@ static void print_help(const char *p)
 	std::clog << "Example: " << p << " --nodownload --torrents a.torrent b.torrent c.torrent" << std::endl;
 }
 
-static void asio_sighandler(const boost::system::error_code &error, int sig)
-{
-	std::cerr << "asio_sighandler(): received signal " << sig << ": " << error.message() << std::endl;
-}
-
 int main(int argc, char *argv[])
 {
 	bool noseed = false;
