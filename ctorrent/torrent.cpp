@@ -722,7 +722,8 @@ void Torrent::handleRequestBlock(const PeerPtr &peer, uint32_t index, uint32_t b
 		errno = 0;
 		FILE *fp = file.fp;
 		uint8_t c = fgetc(fp);
-		if (errno == EBADF && !(fp = fopen(file.path.c_str(), "rb"))) {
+		bool was = errno != EBADF;
+		if (!was && !(fp = fopen(file.path.c_str(), "rb"))) {
 			std::cerr << m_name << ": handleRequestBlock(): unable to open: " << file.path.c_str() << ": " << strerror(errno) << std::endl;
 			return;
 		}
@@ -736,7 +737,8 @@ void Torrent::handleRequestBlock(const PeerPtr &peer, uint32_t index, uint32_t b
 		while (writePos < max) {
 			int read = fread(&block[writePos], 1, readSize - writePos, fp);
 			if (read < 0) {
-				fclose(fp);
+				if (!was)
+					fclose(fp);
 				std::cerr << m_name << ": handleRequestBlock(): unable to read from: " << file.path.c_str() << std::endl;
 				return;
 			}
@@ -744,7 +746,8 @@ void Torrent::handleRequestBlock(const PeerPtr &peer, uint32_t index, uint32_t b
 			writePos += read;
 		}
 
-		fclose(fp);
+		if (!was)
+			fclose(fp);
 	}
 
 	peer->sendPieceBlock(index, begin, block, length);
