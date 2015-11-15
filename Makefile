@@ -8,11 +8,11 @@ CXX = g++
 BTYPE = -g3 -ggdb3 -O0 -D_DEBUG
 CXXFLAGS = -std=c++11 $(DEPFLAGS) $(BTYPE) -fopenmp -Wall -Wextra -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter -I"."
 
-LIBS = -fopenmp
+LIBS = -fopenmp -lboost_system-mt -lboost_program_options-mt 
 ifeq ($(OS),Windows_NT)
 LIBS += -lboost_system-mt -lboost_program_options-mt -lws2_32 -lshlwapi
 else
-LIBS += -lboost_system-mt -lboost_program_options-mt -lpthread
+LIBS += -lpthread
 endif
 
 OBJ_DIR = obj
