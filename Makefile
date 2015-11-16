@@ -10,7 +10,7 @@ CXXFLAGS = -std=c++11 $(DEPFLAGS) $(BTYPE) -fopenmp -Wall -Wextra -Wno-sign-comp
 
 LIBS = -fopenmp -lboost_system-mt -lboost_program_options-mt 
 ifeq ($(OS),Windows_NT)
-LIBS += -lboost_system-mt -lboost_program_options-mt -lws2_32 -lshlwapi
+LIBS += -lws2_32 -lshlwapi
 else
 LIBS += -lpthread
 endif
