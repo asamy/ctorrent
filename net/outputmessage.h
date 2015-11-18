@@ -48,31 +48,12 @@ public:
 	const uint8_t *data(size_t p) const { return &m_buffer[p]; }
 	size_t size() const { return m_pos; }
 
-	inline OutputMessage &operator<<(const uint8_t &b)
-	{
-		addByte(b);
-		return *this;
-	}
-	inline OutputMessage &operator<<(const uint16_t &u)
-	{
-		addU16(u);
-		return *this;
-	}
-	inline OutputMessage &operator<<(const uint32_t &u)
-	{
-		addU32(u);
-		return *this;
-	}
-	inline OutputMessage &operator<<(const uint64_t &u)
-	{
-		addU64(u);
-		return *this;
-	}
-	inline OutputMessage &operator<<(const std::string &s)
-	{
-		addString(s);
-		return *this;
-	}
+	inline const uint8_t &operator[] (size_t index) const { return m_buffer[index]; }
+	inline OutputMessage &operator<<(const uint8_t &b) { addByte(b); return *this; }
+	inline OutputMessage &operator<<(const uint16_t &u) { addU16(u); return *this; }
+	inline OutputMessage &operator<<(const uint32_t &u) { addU32(u); return *this; }
+	inline OutputMessage &operator<<(const uint64_t &u) { addU64(u); return *this; }
+	inline OutputMessage &operator<<(const std::string &s) { addString(s); return *this; }
 
 private:
 	DataBuffer<uint8_t> m_buffer;
@@ -81,3 +62,4 @@ private:
 };
 
 #endif
+

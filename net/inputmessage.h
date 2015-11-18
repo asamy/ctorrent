@@ -44,36 +44,12 @@ public:
 	uint64_t getU64();
 	std::string getString();
 
-	inline InputMessage &operator=(uint8_t *data)
-	{
-		m_data = data;
-		return *this;
-	}
-	inline InputMessage &operator>>(uint8_t &b)
-	{
-		b = getByte();
-		return *this;
-	}
-	inline InputMessage &operator>>(uint16_t &u)
-	{
-		u = getU16();
-		return *this;
-	}
-	inline InputMessage &operator>>(uint32_t &u)
-	{
-		u = getU32();
-		return *this;
-	}
-	inline InputMessage &operator>>(uint64_t &u)
-	{
-		u = getU64();
-		return *this;
-	}
-	inline InputMessage &operator>>(std::string &s)
-	{
-		s = getString();
-		return *this;
-	}
+	inline InputMessage &operator=(uint8_t *data) { m_data = data; return *this; }
+	inline InputMessage &operator>>(uint8_t &b) { b = getByte(); return *this; }
+	inline InputMessage &operator>>(uint16_t &u) { u = getU16(); return *this; }
+	inline InputMessage &operator>>(uint32_t &u) { u = getU32(); return *this; }
+	inline InputMessage &operator>>(uint64_t &u) { u = getU64(); return *this; }
+	inline InputMessage &operator>>(std::string &s) { s = getString(); return *this; }
 
 private:
 	uint8_t *m_data;
