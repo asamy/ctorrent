@@ -69,6 +69,7 @@ protected:
 	void handleMessage(MessageType mType, InputMessage in);
 	void handleError(const std::string &);
 
+	void sendKeepAlive();
 	void sendBitfield(const std::vector<uint8_t> &payload);
 	void sendHave(uint32_t index);
 	void sendPieceBlock(uint32_t index, uint32_t begin, uint8_t *block, uint32_t size);

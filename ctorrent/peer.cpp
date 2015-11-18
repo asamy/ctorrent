@@ -24,6 +24,8 @@
 
 #include <iostream>
 
+#define KEEPALIVE_INTERVAL	30 * 1000
+
 Peer::Peer(Torrent *torrent)
 	: m_torrent(torrent),
 	  m_conn(new Connection())
@@ -177,7 +179,7 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 			return handleError("invalid have-message size");
 
 		uint32_t p = in.getU32();
-		if (!hasPiece(p))
+		if (p < m_torrent->totalPieces() && !hasPiece(p))
 			pushPiece(p);
 		break;
 	}
@@ -188,7 +190,7 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 
 		m_torrent->handlePeerDebug(shared_from_this(), "bit field");
 		uint8_t *buf = in.getBuffer();
-#if 0	// FIXME: This is broken for bytes that start with 4 zero bits.
+#if 0	// FIXME: FUN: This is broken for bytes that start with 4 zero bits.
 		for (size_t i = 0, index = 0; i < payloadSize; ++i) {
 			uint8_t b = buf[i];
 			if (b == 0) {
@@ -213,17 +215,13 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 			index += trailing;
 		}
 #else
-		for (size_t i = 0, index = 0; i < payloadSize; ++i) {
-			for (uint8_t x = 128; x > 0; x >>= 1) {
-				if ((buf[i] & x) != x) {
-					++index;
-					continue;
+		for (size_t i = 0; i < payloadSize; ++i) {
+			for (uint8_t x = 0; x < 8; ++x) {
+				if (buf[i] & (1 << (7 - x))) {
+					size_t index = i * 8 + x;
+					if (index < m_torrent->totalPieces())
+						pushPiece(index);
 				}
-
-				if (index >= m_torrent->totalPieces())
-					break;
-
-				pushPiece(index++);
 			}
 		}
 #endif
@@ -341,6 +339,12 @@ void Peer::handleError(const std::string &errmsg)
 {
 	m_torrent->removePeer(shared_from_this(), errmsg);
 	disconnect();
+}
+
+void Peer::sendKeepAlive()
+{
+	const uint8_t keepalive[] = { 0, 0, 0, 0 };
+	m_conn->write(keepalive, sizeof(keepalive));
 }
 
 void Peer::sendBitfield(const std::vector<uint8_t> &payload)

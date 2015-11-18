@@ -571,6 +571,7 @@ void Torrent::connectToPeers(const boost::any &_peers)
 	} else {
 		// this can happen?
 		std::cerr << m_name << ": peers type unhandled: " << _peers.type().name() << std::endl;
+		__builtin_unreachable();
 	}
 }
 
