@@ -33,7 +33,7 @@ public:
 	Scheduler();
 	~Scheduler();
 
-	uint32_t addEvent(const SchedulerCallback &cb, uint32_t ms, bool continous);
+	uint32_t addEvent(const SchedulerCallback &cb, uint32_t ms);
 	void stopEvent(uint32_t id);
 
 private:

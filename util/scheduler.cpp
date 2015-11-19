@@ -31,7 +31,7 @@
 #include <algorithm>
 
 #include <queue>
-#include <list>
+#include <unordered_set>
 
 #include <iostream>
 
@@ -39,38 +39,40 @@
 Scheduler g_sched;
 
 struct SchedulerEvent {
-	SchedulerEvent(const SchedulerCallback &cb, uint32_t ms, bool cont)
+	SchedulerEvent(const SchedulerCallback &cb, uint32_t ms)
 	{
 		static uint32_t lastId = 0;
 		m_eventId = lastId++;
 		m_callback = cb;
-		m_continous = cont;
-		m_ms = ms;
-		start();
-	}
-
-	void start()
-	{
 		m_expiry = std::chrono::system_clock::now()
-			+ std::chrono::milliseconds(m_ms);
-	}
+			+ std::chrono::milliseconds(ms);
 
-	bool continous() const { return m_continous; }
+	}
+	~SchedulerEvent() { m_callback = nullptr; }
+
 	bool expired() const { return std::chrono::system_clock::now() >= m_expiry; }
 	uint32_t id() const { return m_eventId; }
 	SchedulerCallback callback() const { return m_callback; }
+	std::chrono::time_point<std::chrono::system_clock> expiry() const { return m_expiry; }
 	operator bool() const { return !!m_callback && expired(); }
+
 
 private:
 	SchedulerCallback m_callback;
 	std::chrono::time_point<std::chrono::system_clock> m_expiry;
-	uint32_t m_eventId, m_ms;
-	bool m_continous;
+	uint32_t m_eventId;
+};
+
+struct SchedulerLess {
+	bool operator() (const SchedulerEvent &lhs, const SchedulerEvent &rhs) const {
+		return lhs.expiry() < rhs.expiry();
+	}
 };
 
 class SchedulerImpl {
 public:
-	std::list<SchedulerEvent> events;
+	std::priority_queue<SchedulerEvent, std::deque<SchedulerEvent>, SchedulerLess> events;
+	std::unordered_set<uint32_t> pendingRemoval;
 	std::mutex mutex;
 
 public:
@@ -111,13 +113,13 @@ Scheduler::~Scheduler()
 	delete i;
 }
 
-uint32_t Scheduler::addEvent(const SchedulerCallback &cb, uint32_t ms, bool continous)
+uint32_t Scheduler::addEvent(const SchedulerCallback &cb, uint32_t ms)
 {
-	SchedulerEvent ev(cb, ms, continous);
+	SchedulerEvent ev(cb, ms);
 
 	bool notify = i->events.empty();;
 	i->mutex.lock();
-	i->events.push_back(ev);
+	i->events.push(ev);
 	i->mutex.unlock();
 	if (notify)
 		i->notify_all();
@@ -128,9 +130,7 @@ uint32_t Scheduler::addEvent(const SchedulerCallback &cb, uint32_t ms, bool cont
 void Scheduler::stopEvent(uint32_t id)
 {
 	std::lock_guard<std::mutex> lock(i->mutex);
-	auto it = std::find_if(i->events.begin(), i->events.end(), [id] (const SchedulerEvent &e) { return e.id() == id; });
-	if (it != i->events.end())
-		i->events.erase(it);
+	i->pendingRemoval.insert(id);
 }
 
 void SchedulerImpl::dispatcherThread()
@@ -159,38 +159,25 @@ void SchedulerImpl::thread()
 	std::unique_lock<std::mutex> m(mutex, std::defer_lock);
 
 	while (!m_stopped) {
-		m.lock();
-		if (events.empty()) {
-			// Let's wait there are events waiting
-			m.unlock();
+		if (events.empty())
 			m_condition.wait(m);
-			if (m_stopped)
-				break;
+		else
+			m_condition.wait_until(m, events.top().expiry());
+
+		if (m_stopped)
+			break;
+
+		SchedulerEvent e = events.top();
+		events.pop();
+
+		auto it = pendingRemoval.find(e.id());
+		if (it != pendingRemoval.end()) {
+			pendingRemoval.erase(it);
+			continue;
 		}
 
-		for (auto it = events.begin(); it != events.end();) {
-			SchedulerEvent &e = *it;
-			if (e) {
-				// unlock, notify dispatcher and remove if so
-				m_queue.push(e.callback());
-				m.unlock();
-				m_condition.notify_one();
-
-				m.lock();
-				if (e.continous()) {
-					e.start();
-					++it;
-				} else {
-					// purge
-					it = events.erase(it);
-				}
-			} else {
-				// just increment
-				++it;
-			}
-		}
-
-		m.unlock();
+		m_queue.push(e.callback());
+		m_condition.notify_all();
 	}
 }
 
