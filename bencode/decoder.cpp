@@ -60,10 +60,11 @@ bool Bencode::readIntUntil(const char byte, T &value)
 	if (m_buffer[pos] != byte)
 		return false;
 
-	char buffer[pos - m_pos];
-	strncpy(buffer, &m_buffer[m_pos], pos - m_pos);
+	size_t size = pos - m_pos;
+	if (size > m_buffer.cap())
+		return false;
 
-	std::istringstream is(buffer);
+	std::istringstream is(std::string(&m_buffer[m_pos], size));
 	is >> value;
 
 	m_pos = pos + 1;
@@ -88,9 +89,9 @@ uint64_t Bencode::readUint()
 	return std::numeric_limits<uint64_t>::max();
 }
 
-std::vector<boost::any> Bencode::readVector()
+VectorType Bencode::readVector()
 {
-	std::vector<boost::any> ret;
+	VectorType ret;
 
 	for (;;) {
 		char byte;
