@@ -63,18 +63,35 @@ typedef std::tuple<std::string, std::string, std::string> UrlData;
 #define URL_HOSTNAME(u)		std::get<1>((u))
 #define URL_SERVNAME(u)		std::get<2>((u))
 
-UrlData parseUrl(const std::string &str);
-std::string bytesToHumanReadable(uint32_t bytes, bool si);
-std::string ip2str(uint32_t ip);
-std::string getcwd();
-std::string urlencode(const std::string& url);
+extern UrlData parseUrl(const std::string &str);
+extern std::string bytesToHumanReadable(uint32_t bytes, bool si);
+extern std::string ip2str(uint32_t ip);
+extern uint32_t str2ip(const std::string &ip);
+extern std::string getcwd();
+extern std::string urlencode(const std::string& url);
 
-bool validatePath(const std::string& base, const std::string& path);
-bool nodeExists(const std::string& node);
+extern bool validatePath(const std::string &base, const std::string &path);
+extern bool nodeExists(const std::string &node);
 
 static inline bool test_bit(uint32_t bits, uint32_t bit)
 {
 	return (bits & bit) == bit;
+}
+
+static inline bool starts_with(const std::string &s, const std::string &start)
+{
+	if (s.length() < start.length())
+		return false;
+
+	return s.substr(0, start.length()) == start;
+}
+
+static inline bool ends_with(const std::string &s, const std::string &end)
+{
+	if (s.length() < end.length())
+		return false;
+
+	return s.substr(s.length() - end.length()) == end;
 }
 
 #ifdef __MINGW32__
@@ -82,7 +99,7 @@ static inline bool test_bit(uint32_t bits, uint32_t bit)
 
 namespace std {
 	template <typename T>
-	string to_string(T value)
+	string to_string(const T &value)
 	{
 		return boost::lexical_cast<string>(value);
 	}

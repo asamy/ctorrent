@@ -32,6 +32,12 @@
 #include <iostream>
 #include <stdexcept>
 
+#ifdef _WIN32
+#include <ws2tcpip.h>
+#else
+#include <arpa/inet.h>
+#endif
+
 UrlData parseUrl(const std::string &str)
 {
 	/// TODO: Regex could be quicker?
@@ -98,6 +104,13 @@ std::string ip2str(uint32_t ip)
 	char buffer[17];
 	sprintf(buffer, "%u.%u.%u.%u", ip & 0xFF, (ip >> 8) & 0xFF, (ip >> 16) & 0xFF, ip >> 24);
 	return buffer;
+}
+
+uint32_t str2ip(const std::string &ip)
+{
+	uint32_t i;
+	inet_pton(AF_INET, ip.c_str(), &i);
+	return i;
 }
 
 std::string getcwd()

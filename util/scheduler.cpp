@@ -50,12 +50,9 @@ struct SchedulerEvent {
 	}
 	~SchedulerEvent() { m_callback = nullptr; }
 
-	bool expired() const { return std::chrono::system_clock::now() >= m_expiry; }
 	uint32_t id() const { return m_eventId; }
 	SchedulerCallback callback() const { return m_callback; }
 	std::chrono::time_point<std::chrono::system_clock> expiry() const { return m_expiry; }
-	operator bool() const { return !!m_callback && expired(); }
-
 
 private:
 	SchedulerCallback m_callback;
@@ -83,12 +80,15 @@ public:
 	}
 
 	~SchedulerImpl() {
+		stop();
+	}
+
+	void stop() {
 		m_stopped = true;
 		m_condition.notify_one();
 		m_thread.join();
 		m_dispatcherThread.join();
 	}
-
 	void notify_all() { m_condition.notify_all(); }
 
 protected:
@@ -117,7 +117,7 @@ uint32_t Scheduler::addEvent(const SchedulerCallback &cb, uint32_t ms)
 {
 	SchedulerEvent ev(cb, ms);
 
-	bool notify = i->events.empty();;
+	bool notify = i->events.empty();
 	i->mutex.lock();
 	i->events.push(ev);
 	i->mutex.unlock();
@@ -131,6 +131,13 @@ void Scheduler::stopEvent(uint32_t id)
 {
 	std::lock_guard<std::mutex> lock(i->mutex);
 	i->pendingRemoval.insert(id);
+}
+
+void Scheduler::stop()
+{
+	i->stop();
+	delete i;
+	i = nullptr;
 }
 
 void SchedulerImpl::dispatcherThread()
@@ -159,11 +166,13 @@ void SchedulerImpl::thread()
 	std::unique_lock<std::mutex> m(mutex, std::defer_lock);
 
 	while (!m_stopped) {
-		if (events.empty())
+		if (events.empty()) {
 			m_condition.wait(m);
-		else
-			m_condition.wait_until(m, events.top().expiry());
-
+			if (m_stopped)
+				break;
+		}
+	
+		m_condition.wait_until(m, events.top().expiry());
 		if (m_stopped)
 			break;
 

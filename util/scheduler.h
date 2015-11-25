@@ -35,6 +35,7 @@ public:
 
 	uint32_t addEvent(const SchedulerCallback &cb, uint32_t ms);
 	void stopEvent(uint32_t id);
+	void stop();
 
 private:
 	SchedulerImpl *i;

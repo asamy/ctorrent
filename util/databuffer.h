@@ -6,17 +6,34 @@
 #include <string.h>
 #include <assert.h>
 
+#include <algorithm>
+
 template <typename T>
 class DataBuffer
 {
 public:
-	DataBuffer(size_t res = 64) :
-		m_size(0),
-		m_capacity(res),
-		m_buffer(new T[m_capacity])
+	DataBuffer(size_t res = 64)
+		: m_size(0),
+		  m_capacity(res),
+		  m_buffer(new T[m_capacity])
 	{
 	}
-	~DataBuffer() { delete[] m_buffer; }
+	DataBuffer(DataBuffer<T> const &buf)
+	{
+		m_capacity = buf.m_capacity;
+		m_size = buf.m_size;
+		m_buffer = new T[m_capacity];
+		memcpy(m_buffer, buf.m_buffer, m_capacity);
+	}
+	DataBuffer(DataBuffer<T> &&buf)
+	{
+		m_capacity = buf.m_capacity;
+		m_size = buf.m_capacity;
+		m_buffer = buf.m_buffer;
+
+		buf.m_buffer = nullptr;
+	}
+	~DataBuffer() { delete[] m_buffer; m_buffer = nullptr; }
 
 	inline size_t size() const { return m_size; }
 	inline size_t cap() const { return m_capacity; }
@@ -31,6 +48,22 @@ public:
 	{
 		assert(i < m_capacity);
 		return m_buffer[i];
+	}
+
+	void swap(DataBuffer<T> &rhs)
+	{
+		std::swap(m_buffer, rhs.m_buffer);
+	}
+
+	inline DataBuffer<T> &operator=(DataBuffer<T> const &rhs)
+	{
+		DataBuffer<T>(rhs).swap(*this);
+		return *this;
+	}
+	inline DataBuffer<T> &operator=(DataBuffer<T> &&rhs)
+	{
+		DataBuffer<T>(static_cast<DataBuffer<T> &&>(rhs)).swap(*this);
+		return *this;
 	}
 
 	inline void setData(T *data, size_t size)
