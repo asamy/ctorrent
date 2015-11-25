@@ -44,6 +44,7 @@ public:
 	uint64_t getU64();
 	std::string getString();
 
+	inline uint8_t &operator[] (size_t i) { return m_data[i]; }
 	inline InputMessage &operator=(uint8_t *data) { m_data = data; return *this; }
 	inline InputMessage &operator>>(uint8_t &b) { b = getByte(); return *this; }
 	inline InputMessage &operator>>(uint16_t &u) { u = getU16(); return *this; }

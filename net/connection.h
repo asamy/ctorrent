@@ -75,9 +75,11 @@ protected:
 	void handleConnect(const boost::system::error_code &);
 	void handleResolve(const boost::system::error_code &, asio::ip::basic_resolver<asio::ip::tcp>::iterator);
 	void handleError(const boost::system::error_code &);
+	void handleTimeout(const boost::system::error_code &);
 
 private:
 	asio::deadline_timer m_delayedWriteTimer;
+	asio::deadline_timer m_connectTimer;
 	asio::ip::tcp::resolver m_resolver;
 	asio::ip::tcp::socket m_socket;
 

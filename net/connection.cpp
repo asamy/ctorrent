@@ -27,6 +27,7 @@ static std::list<std::shared_ptr<asio::streambuf>> g_outputStreams;
 
 Connection::Connection() :
 	m_delayedWriteTimer(g_service),
+	m_connectTimer(g_service),
 	m_resolver(g_service),
 	m_socket(g_service)
 {
@@ -90,7 +91,7 @@ void Connection::write(const uint8_t *bytes, size_t size)
 		g_connectionLock.unlock();
 
 		m_delayedWriteTimer.cancel();
-		m_delayedWriteTimer.expires_from_now(boost::posix_time::milliseconds(10));
+		m_delayedWriteTimer.expires_from_now(boost::posix_time::milliseconds(0));
 		m_delayedWriteTimer.async_wait(std::bind(&Connection::internalWrite, shared_from_this(), std::placeholders::_1));
 	}
 
@@ -125,7 +126,9 @@ void Connection::read(size_t bytes, const ReadCallback &rc)
 
 void Connection::internalWrite(const boost::system::error_code &e)
 {
-	if (e == asio::error::operation_aborted)
+	m_delayedWriteTimer.cancel();
+
+	if (e == asio::error::operation_aborted || !m_socket.is_open())
 		return;
 
 	std::shared_ptr<asio::streambuf> outputStream = m_outputStream;
@@ -170,6 +173,9 @@ void Connection::handleResolve(
 		return handleError(e);
 
 	m_socket.async_connect(*endpoint, std::bind(&Connection::handleConnect, shared_from_this(), std::placeholders::_1));
+	m_connectTimer.cancel();
+	m_connectTimer.expires_from_now(boost::posix_time::seconds(30));
+	m_connectTimer.async_wait(std::bind(&Connection::handleTimeout, shared_from_this(), std::placeholders::_1));
 }
 
 void Connection::handleConnect(const boost::system::error_code &e)
@@ -180,13 +186,19 @@ void Connection::handleConnect(const boost::system::error_code &e)
 		m_cb();
 }
 
-void Connection::handleError(const boost::system::error_code& error)
+void Connection::handleError(const boost::system::error_code &error)
 {
 	if (error == asio::error::operation_aborted)
 		return;
 
 	if (m_eh)
 		m_eh(error.message());
+}
+
+void Connection::handleTimeout(const boost::system::error_code &error)
+{
+	if (error != asio::error::operation_aborted)
+		return handleError(asio::error::timed_out);
 }
 
 std::string Connection::getIPString() const
