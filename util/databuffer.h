@@ -18,17 +18,11 @@ public:
 		  m_buffer(new T[m_capacity])
 	{
 	}
-	DataBuffer(DataBuffer<T> const &buf)
-	{
-		m_capacity = buf.m_capacity;
-		m_size = buf.m_size;
-		m_buffer = new T[m_capacity];
-		memcpy(m_buffer, buf.m_buffer, m_capacity);
-	}
+	DataBuffer(DataBuffer<T> const &buf) = delete;
 	DataBuffer(DataBuffer<T> &&buf)
 	{
 		m_capacity = buf.m_capacity;
-		m_size = buf.m_capacity;
+		m_size = buf.m_size;
 		m_buffer = buf.m_buffer;
 
 		buf.m_buffer = nullptr;
@@ -52,17 +46,15 @@ public:
 
 	void swap(DataBuffer<T> &rhs)
 	{
+		std::swap(m_capacity, rhs.m_capacity);
+		std::swap(m_size, rhs.m_size);
 		std::swap(m_buffer, rhs.m_buffer);
 	}
 
-	inline DataBuffer<T> &operator=(DataBuffer<T> const &rhs)
-	{
-		DataBuffer<T>(rhs).swap(*this);
-		return *this;
-	}
+	inline DataBuffer<T> &operator=(DataBuffer<T> const &rhs) = delete;
 	inline DataBuffer<T> &operator=(DataBuffer<T> &&rhs)
 	{
-		DataBuffer<T>(static_cast<DataBuffer<T> &&>(rhs)).swap(*this);
+		rhs.swap(*this);
 		return *this;
 	}
 
