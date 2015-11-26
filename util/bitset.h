@@ -27,8 +27,6 @@
 #include <stdint.h>
 #include <string.h>
 
-// TODO: Perhaps make this templated so that the user can specify type?
-// TODO: Remove rounded size and make count() compatible with the latter
 class bitset {
 public:
 	bitset(size_t size)
@@ -46,12 +44,10 @@ public:
 	void construct(size_t size)
 	{
 		m_size = size;
-		m_roundedSize = roundSize(size);
-		m_bits = new uint8_t[m_roundedSize];
-		memset(m_bits, 0x00, m_roundedSize);
+		m_bits = new uint8_t[m_size];
+		memset(m_bits, 0x00, m_size);
 	}
 
-	// we fold i down to be in range from 0 to 7
 	bool test(size_t i) const { return !!(bitsAt(i) & (1 << (i % CHAR_BIT))); }
 	void set(size_t i) { bitsAt(i) |= (1 << (i % CHAR_BIT)); }
 	void set(size_t i, bool v) { bitsAt(i) ^= ((int)-v ^ bitsAt(i)) & (1 << (i % CHAR_BIT)); }
@@ -64,44 +60,52 @@ public:
 	const uint8_t *bits() const { return m_bits; }
 	uint8_t *bits() { return m_bits; }
 
-	size_t roundSize(size_t s) const { return ((s + 32 - 1) / 32) * 32; }
-	size_t roundedSize() const { return m_roundedSize; }
+	size_t popcnt(uint64_t v) const
+	{
+#ifdef __GNUC__
+		return __builtin_popcount(v);
+#else
+		// Hamming Weight
+		v = v - ((v >> 1) & 0x5555555555555555);
+		v = (v & 0x3333333333333333) + ((v >> 2) & 0x3333333333333333);
+		return (((v + (v >> 4)) & 0x0F0F0F0F0F0F0F0F) * 0x0101010101010101) >> 56;
+#endif
+	}
+
 	size_t size() const { return m_size; }
 	size_t count() const
 	{
-		// Hamming Weight algorithm
 		size_t set = 0;
 		const uint8_t *src = m_bits;
-		const uint8_t *dst = m_bits + m_roundedSize;
-		while (src < dst) {
-#ifdef __GNUC__
-			set += __builtin_popcount(*(uint32_t *)src);
-#else
-			uint32_t v = *(uint32_t *)src;
-			v = v - ((v >> 1) & 0x55555555);
-			v = (v & 0x33333333) + ((v >> 2) & 0x33333333);
-			set += (((v + (v >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
-#endif
+		const uint8_t *dst = m_bits + m_size;
+		while (src + 7 <= dst) {
+			set += popcnt(*(uint64_t *)src);
 			src += 4;
 		}
+
+		if (src + 3 <= dst) {
+			set += popcnt(*(uint32_t *)src);
+			src += 4;
+		}
+
+		if (src + 1 < dst) {
+			set += popcnt(*(uint16_t *)src);
+			src += 2;
+		}
+
+		if (src < dst)
+			set += popcnt(*(uint8_t *)src);
 
 		return set;
 	}
 
-	// Each uint8_t has 8 bits so we fold it down to figure out where this bit is at.
-	// Could use a bigger type but it really doesn't matter anyway...
 	uint8_t bitsAt(int i) const { return m_bits[i / CHAR_BIT]; }
 	uint8_t &bitsAt(int i) { return m_bits[i / CHAR_BIT]; }
 
 	void raw_set(const uint8_t *bits, size_t size)
 	{
-		if (size >= m_roundedSize)
-			size = m_roundedSize;
-		else
-			m_roundedSize = roundSize(size);
-
-		memcpy(&m_bits[0], bits, size);
 		m_size = size;
+		memcpy(&m_bits[0], bits, size);
 	}
 
 private:
