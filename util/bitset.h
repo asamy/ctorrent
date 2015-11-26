@@ -46,7 +46,7 @@ public:
 	void construct(size_t size)
 	{
 		m_size = size;
-		m_roundedSize = ((size + 32 - 1) / 32) * 32;
+		m_roundedSize = roundSize(size);
 		m_bits = new uint8_t[m_roundedSize];
 		memset(m_bits, 0x00, m_roundedSize);
 	}
@@ -64,6 +64,7 @@ public:
 	const uint8_t *bits() const { return m_bits; }
 	uint8_t *bits() { return m_bits; }
 
+	size_t roundSize(size_t s) const { return ((s + 32 - 1) / 32) * 32; }
 	size_t roundedSize() const { return m_roundedSize; }
 	size_t size() const { return m_size; }
 	size_t count() const
@@ -73,10 +74,14 @@ public:
 		const uint8_t *src = m_bits;
 		const uint8_t *dst = m_bits + m_roundedSize;
 		while (src < dst) {
+#ifdef __GNUC__
+			set += __builtin_popcount(*(uint32_t *)src);
+#else
 			uint32_t v = *(uint32_t *)src;
 			v = v - ((v >> 1) & 0x55555555);
 			v = (v & 0x33333333) + ((v >> 2) & 0x33333333);
 			set += (((v + (v >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
+#endif
 			src += 4;
 		}
 
@@ -87,6 +92,17 @@ public:
 	// Could use a bigger type but it really doesn't matter anyway...
 	uint8_t bitsAt(int i) const { return m_bits[i / CHAR_BIT]; }
 	uint8_t &bitsAt(int i) { return m_bits[i / CHAR_BIT]; }
+
+	void raw_set(const uint8_t *bits, size_t size)
+	{
+		if (size >= m_roundedSize)
+			size = m_roundedSize;
+		else
+			m_roundedSize = roundSize(size);
+
+		memcpy(&m_bits[0], bits, size);
+		m_size = size;
+	}
 
 private:
 	uint8_t *m_bits;
