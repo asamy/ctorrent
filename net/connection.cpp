@@ -54,6 +54,7 @@ void Connection::connect(const std::string &host, const std::string &port, const
 {
 	asio::ip::tcp::resolver::query query(host, port);
 
+	m_connectTimer.cancel();
 	m_cb = cb;
 	m_resolver.async_resolve(
 		query,
@@ -63,6 +64,9 @@ void Connection::connect(const std::string &host, const std::string &port, const
 
 void Connection::close(bool warn)
 {
+	m_delayedWriteTimer.cancel();
+	m_connectTimer.cancel();
+
 	if (!isConnected()) {
 		if (m_eh && warn)
 			m_eh("Connection::close(): Called on an already closed connection!");
@@ -71,9 +75,10 @@ void Connection::close(bool warn)
 
 	boost::system::error_code ec;
 	m_socket.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+	m_socket.close();
+
 	if (ec && warn && m_eh)
 		m_eh(ec.message());
-	m_socket.close();
 }
 
 void Connection::write(const uint8_t *bytes, size_t size)
@@ -169,17 +174,18 @@ void Connection::handleResolve(
 	asio::ip::basic_resolver<asio::ip::tcp>::iterator endpoint
 )
 {
+	m_connectTimer.cancel();
 	if (e)
 		return handleError(e);
 
 	m_socket.async_connect(*endpoint, std::bind(&Connection::handleConnect, shared_from_this(), std::placeholders::_1));
-	m_connectTimer.cancel();
 	m_connectTimer.expires_from_now(boost::posix_time::seconds(30));
 	m_connectTimer.async_wait(std::bind(&Connection::handleTimeout, shared_from_this(), std::placeholders::_1));
 }
 
 void Connection::handleConnect(const boost::system::error_code &e)
 {
+	m_connectTimer.cancel();
 	if (e)
 		return handleError(e);
 	else if (m_cb)
