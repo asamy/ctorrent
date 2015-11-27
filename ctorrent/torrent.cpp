@@ -310,7 +310,6 @@ void Torrent::addPeer(const PeerPtr &peer)
 		m_blacklisted.erase(it);
 
 	m_peers.insert(std::make_pair(peer->ip(), peer));
-	std::clog << m_meta.name() << ": " << peer->getIP() << ": connection successful (" << m_peers.size() << " established)" << std::endl;
 }
 
 void Torrent::removePeer(const PeerPtr &peer, const std::string &errmsg)
@@ -318,8 +317,6 @@ void Torrent::removePeer(const PeerPtr &peer, const std::string &errmsg)
 	auto it = m_peers.find(peer->ip());
 	if (it != m_peers.end())
 		m_peers.erase(it);
-
-	std::clog << m_meta.name() << ": " << peer->getIP() << ": " << errmsg << " (" << m_peers.size() << " established)" << std::endl;
 }
 
 void Torrent::disconnectPeers()
@@ -372,10 +369,6 @@ bool Torrent::handleRequestBlock(const PeerPtr &peer, uint32_t index, uint32_t b
 
 void Torrent::onPieceWriteComplete(uint32_t from, uint32_t index)
 {
-	if (isFinished())
-		std::clog << m_meta.name() << ": Done downloading" << std::endl;
-	else
-		std::clog << m_meta.name() << ": Finished " << m_fileManager.completedPieces() << "/" << m_fileManager.totalPieces() << std::endl;
 }
 
 void Torrent::onPieceReadComplete(uint32_t from, uint32_t index, uint32_t begin, uint8_t *block, size_t size)
@@ -389,18 +382,15 @@ void Torrent::onPieceReadComplete(uint32_t from, uint32_t index, uint32_t begin,
 
 void Torrent::handleTrackerError(Tracker *tracker, const std::string &error)
 {
-	std::cerr << m_meta.name() << ": " << tracker->host() << ":" << tracker->port() << ": tracker request failed: " << error << std::endl;
 }
 
 void Torrent::handlePeerDebug(const PeerPtr &peer, const std::string &msg)
 {
-	std::clog << m_meta.name() << ": " << peer->getIP() << " " << msg << std::endl;
 }
 
 void Torrent::handleNewPeer(const PeerPtr &peer)
 {
 	m_peers.insert(std::make_pair(peer->ip(), peer));
 	sendBitfield(peer);
-	std::clog << m_meta.name() << ": " << peer->getIP() << ": connected! (" << m_peers.size() << " established)" << std::endl;
 }
 

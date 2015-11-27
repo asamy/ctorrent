@@ -29,6 +29,10 @@
 
 #include <boost/program_options.hpp>
 
+#ifndef _WIN32
+#include <ncurses.h>
+#endif
+
 static void print_help(const char *p)
 {
 	std::clog << "Usage: " << p << " <options...> <torrent...>" << std::endl;
@@ -41,6 +45,71 @@ static void print_help(const char *p)
 	std::clog << "\t\t--noseed (-e)			Do not seed after download has finished." << std::endl;
 	std::clog << "\t\t--torrents (-t) 		Specify torrent file(s)." << std::endl;
 	std::clog << "Example: " << p << " --nodownload --torrents a.torrent b.torrent c.torrent" << std::endl;
+}
+
+#ifdef _WIN32
+enum {
+	COL_BLACK = 0,
+	COL_GREEN = 10,
+	COL_YELLOW = 14,
+};
+
+static void set_color(int col)
+{
+	CONSOLE_SCREEN_BUFFER_INFO i;
+	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &i);
+
+	int back = (i.wAttributes / 16) % 16;
+	if (col % 16 == back % 16)
+		++col;
+	col %= 16;
+	back %= 16;
+
+	uint16_t attrib = ((unsigned)back << 4) | (unsigned)col;
+	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), attrib);
+}
+
+#define printc(c, fmt, args...) do {	\
+	set_color((c));	\
+	printf(fmt, ##args);	\
+	set_color(COL_BLACK);	\
+} while (0)
+#else
+#define printc(c, fmt, args...)	do {	\
+	attron(COLOR_PAIR(c));	\
+	printw(fmt, ##args);	\
+} while (0)
+#endif
+
+static void print_stats(Torrent *t)
+{
+	const TorrentMeta *meta = t->meta();
+	const TorrentFileManager *fm = t->fileManager();
+
+	printc(1, "%s: ", meta->name().c_str());
+	printc(2, "%.2f Mbps (%zd / %zd downloaded) ",
+			t->downloadSpeed(), t->downloadedBytes(), meta->totalSize());
+	printc(2, "[ %d/%d pieces %d peers active ]\n", fm->completedPieces(), fm->totalPieces(), t->activePeers());
+}
+
+static void print_all_stats(Torrent *torrents, size_t total)
+{
+#ifdef _WIN32
+	COORD coord;
+	CONSOLE_SCREEN_BUFFER_INFO info;
+	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info);
+	coord.X = info.dwCursorPosition.X;
+	coord.Y = info.dwCursorPosition.Y;
+#else
+	move(0, 0);
+#endif
+	for (size_t i = 0; i < total; ++i)
+		print_stats(&torrents[i]);
+#ifdef _WIN32
+	SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+#else
+	refresh();
+#endif
 }
 
 int main(int argc, char *argv[])
@@ -90,12 +159,17 @@ int main(int argc, char *argv[])
 	bool nodownload = false;
 	if (vm.count("nodownload"))
 		nodownload = true;
-	else {
-		if (vm.count("piecesize"))
-			maxRequestSize = 1 << (32 - __builtin_clz(maxRequestSize - 1));
-		std::clog << "Using " << dldir << " as downloads directory and " 
-			<< bytesToHumanReadable(maxRequestSize, true) << " piece block size" << std::endl;
-	}
+	else if (vm.count("piecesize"))
+		maxRequestSize = 1 << (32 - __builtin_clz(maxRequestSize - 1));
+
+#ifndef _WIN32
+	initscr();
+	assume_default_colors(COLOR_WHITE, COLOR_BLACK);
+	init_pair(1, COLOR_GREEN, COLOR_BLACK);
+	init_pair(2, COLOR_YELLOW, COLOR_BLACK);
+	attrset(A_BOLD);	// boldy
+	curs_set(0);		// don't show cursor
+#endif
 
 	size_t total = files.size();
 	size_t completed = 0;
@@ -109,7 +183,6 @@ int main(int argc, char *argv[])
 		std::string file = files[i];
 		Torrent *t = &torrents[i];
 
-		std::clog << "Opening: " << file << std::endl;
 		if (!t->open(file, dldir)) {
 			std::cerr << file << ": corrupted torrent file" << std::endl;
 			++errors;
@@ -117,9 +190,10 @@ int main(int argc, char *argv[])
 		}
 
 		const TorrentMeta *meta = t->meta();
-		std::clog << meta->name() << ": Total size: " << bytesToHumanReadable(meta->totalSize(), true) << std::endl;
-		if (nodownload)
+		if (nodownload) {
+			std::clog << meta->name() << ": Total size: " << bytesToHumanReadable(meta->totalSize(), true) << std::endl;
 			continue;
+		}
 
 		++started;
 		threads[i] = std::thread([t, meta, &startport, &completed, &errors, &eseed, noseed]() {
@@ -127,33 +201,23 @@ int main(int argc, char *argv[])
 			Torrent::DownloadState error = t->download(tport);
 			switch (error) {
 			case Torrent::DownloadState::Completed:
-				std::clog << meta->name() << ": finished download" << std::endl;
 				++completed;
 				break;
 			case Torrent::DownloadState::AlreadyDownloaded:
-				std::clog << meta->name() << ": was already downloaded" << std::endl;
 				++completed;
 				break;
 			case Torrent::DownloadState::NetworkError:
-				std::clog << meta->name() << ": Network error was encountered, check your internet connection" << std::endl;
 				++errors;
 				break;
 			case Torrent::DownloadState::TrackerQueryFailure:
-				std::clog << meta->name() << ": The tracker(s) has failed to respond in time or some internal error has occured" << std::endl;
 				++errors;
 				break;
 			}
-
-//			std::clog << t->name() << ": Downloaded: " << bytesToHumanReadable(t->downloadedBytes(), true) << std::endl;
-//			std::clog << t->name() << ": Uploaded:   " << bytesToHumanReadable(t->uploadedBytes(),   true) << std::endl;
 
 			if (!noseed
 				&& (error == Torrent::DownloadState::Completed || error == Torrent::DownloadState::AlreadyDownloaded)
 				&& !t->seed(tport))
-			{
-				std::clog << meta->name() << ": unable to initiate seeding" << std::endl;
 				++eseed;
-			}
 		});
 		threads[i].detach();
 	}
@@ -161,26 +225,28 @@ int main(int argc, char *argv[])
 	if (!nodownload && started > 0) {
 		int last = 0;
 		while (completed != total - errors) {
-			if (errors == total) {
-				std::cerr << "All torrents failed to download" << std::endl;
+			if (errors == total)
 				break;
-			}
 
 			Connection::poll();
+			print_all_stats(torrents, total);
 			if (last == completed)
 				continue;
 
-			std::clog << "Completed " << completed << "/" << total - errors << " (" << errors << " errnoeous torrents)" << std::endl;
 			last = completed;
 		}
 	}
 
 	if (!noseed) {
-		std::clog << "Now seeding" << std::endl;
-		while (eseed != total)
+		while (eseed != total) {
 			Connection::poll();
+			print_all_stats(torrents, total);
+		}
 	}
 
+#ifndef _WIN32
+	endwin();
+#endif
 	return 0;
 }
 
