@@ -116,41 +116,42 @@ int main(int argc, char *argv[])
 			continue;
 		}
 
-		std::clog << t->name() << ": Total size: " << bytesToHumanReadable(t->totalSize(), true) << std::endl;
+		const TorrentMeta *meta = t->meta();
+		std::clog << meta->name() << ": Total size: " << bytesToHumanReadable(meta->totalSize(), true) << std::endl;
 		if (nodownload)
 			continue;
 
 		++started;
-		threads[i] = std::thread([t, &startport, &completed, &errors, &eseed, noseed]() {
+		threads[i] = std::thread([t, meta, &startport, &completed, &errors, &eseed, noseed]() {
 			uint16_t tport = startport++;
-			Torrent::DownloadError error = t->download(tport);
+			Torrent::DownloadState error = t->download(tport);
 			switch (error) {
-			case Torrent::DownloadError::Completed:
-				std::clog << t->name() << ": finished download" << std::endl;
+			case Torrent::DownloadState::Completed:
+				std::clog << meta->name() << ": finished download" << std::endl;
 				++completed;
 				break;
-			case Torrent::DownloadError::AlreadyDownloaded:
-				std::clog << t->name() << ": was already downloaded" << std::endl;
+			case Torrent::DownloadState::AlreadyDownloaded:
+				std::clog << meta->name() << ": was already downloaded" << std::endl;
 				++completed;
 				break;
-			case Torrent::DownloadError::NetworkError:
-				std::clog << t->name() << ": Network error was encountered, check your internet connection" << std::endl;
+			case Torrent::DownloadState::NetworkError:
+				std::clog << meta->name() << ": Network error was encountered, check your internet connection" << std::endl;
 				++errors;
 				break;
-			case Torrent::DownloadError::TrackerQueryFailure:
-				std::clog << t->name() << ": The tracker(s) has failed to respond in time or some internal error has occured" << std::endl;
+			case Torrent::DownloadState::TrackerQueryFailure:
+				std::clog << meta->name() << ": The tracker(s) has failed to respond in time or some internal error has occured" << std::endl;
 				++errors;
 				break;
 			}
 
-			std::clog << t->name() << ": Downloaded: " << bytesToHumanReadable(t->downloadedBytes(), true) << std::endl;
-			std::clog << t->name() << ": Uploaded:   " << bytesToHumanReadable(t->uploadedBytes(),   true) << std::endl;
+//			std::clog << t->name() << ": Downloaded: " << bytesToHumanReadable(t->downloadedBytes(), true) << std::endl;
+//			std::clog << t->name() << ": Uploaded:   " << bytesToHumanReadable(t->uploadedBytes(),   true) << std::endl;
 
 			if (!noseed
-				&& (error == Torrent::DownloadError::Completed || error == Torrent::DownloadError::AlreadyDownloaded)
+				&& (error == Torrent::DownloadState::Completed || error == Torrent::DownloadState::AlreadyDownloaded)
 				&& !t->seed(tport))
 			{
-				std::clog << t->name() << ": unable to initiate seeding" << std::endl;
+				std::clog << meta->name() << ": unable to initiate seeding" << std::endl;
 				++eseed;
 			}
 		});

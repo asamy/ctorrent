@@ -22,19 +22,21 @@
 #include "peer.h"
 #include "torrent.h"
 
-#include <iostream>
+#include <util/scheduler.h>
 
 #define KEEPALIVE_INTERVAL	30 * 1000
 
 Peer::Peer(Torrent *torrent)
-	: m_torrent(torrent),
+	: m_bitset(torrent->fileManager()->totalPieces()),
+	  m_torrent(torrent),
 	  m_conn(new Connection())
 {
 	m_state = PS_AmChoked | PS_PeerChoked;
 }
 
 Peer::Peer(const ConnectionPtr &c, Torrent *t)
-	: m_torrent(t),
+	: m_bitset(t->fileManager()->totalPieces()),
+	  m_torrent(t),
 	  m_conn(c)
 {
 	m_state = PS_AmChoked | PS_PeerChoked;
@@ -51,6 +53,7 @@ void Peer::disconnect()
 {
 	m_conn->close(false);
 	m_conn->setErrorCallback(nullptr);	// deref
+	g_sched.stopEvent(m_eventId);
 }
 
 void Peer::connect(const std::string &ip, const std::string &port)
@@ -102,6 +105,7 @@ void Peer::verify()
 			m_peerId = peerId;
 			m_conn->write(m_handshake, 68);
 			m_torrent->handleNewPeer(shared_from_this());
+			m_eventId = g_sched.addEvent(std::bind(&Peer::sendKeepAlive, shared_from_this()), KEEPALIVE_INTERVAL);
 			m_conn->read(4, std::bind(&Peer::handle, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 		}
 	);
@@ -136,7 +140,6 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 		if (payloadSize != 0)
 			return handleError("invalid choke-message size");
 
-		m_torrent->handlePeerDebug(shared_from_this(), "choke");
 		m_state |= PS_PeerChoked;
 		break;
 	case MT_UnChoke:
@@ -144,9 +147,7 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 			return handleError("invalid unchoke-message size");
 
 		m_state &= ~PS_PeerChoked;		
-		m_torrent->handlePeerDebug(shared_from_this(), "unchoke");
-
-		for (Piece *piece : m_queue)
+		for (const Piece *piece : m_queue)
 			requestPiece(piece->index);
 		break;
 	case MT_Interested:
@@ -154,23 +155,15 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 		if (payloadSize != 0)
 			return handleError("invalid interested-message size");
 
-		m_torrent->handlePeerDebug(shared_from_this(), "interested");
 		m_state |= PS_PeerInterested;
-
-		if (isLocalChoked()) {
-			// 4-byte length, 1-byte packet type
-			static const uint8_t unchoke[5] = { 0, 0, 0, 1, MT_UnChoke };
-			m_conn->write(unchoke, sizeof(unchoke));
-			m_state &= ~PS_AmChoked;
-		}
-
+		if (isLocalChoked())
+			sendUnchoke();
 		break;
 	}
 	case MT_NotInterested:
 		if (payloadSize != 0)
 			return handleError("invalid not-interested-message size");
 
-		m_torrent->handlePeerDebug(shared_from_this(), "not interested");
 		m_state &= ~PS_PeerInterested;
 		break;
 	case MT_Have:
@@ -178,9 +171,9 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 		if (payloadSize != 4)
 			return handleError("invalid have-message size");
 
-		uint32_t p = in.getU32();
-		if (p < m_torrent->totalPieces() && !hasPiece(p))
-			pushPiece(p);
+		uint32_t i = in.getU32();
+		if (i < m_bitset.size())
+			m_bitset.set(i);
 		break;
 	}
 	case MT_Bitfield:
@@ -188,43 +181,16 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 		if (payloadSize < 1)
 			return handleError("invalid bitfield-message size");
 
-		m_torrent->handlePeerDebug(shared_from_this(), "bit field");
 		uint8_t *buf = in.getBuffer();
-#if 0	// FIXME: FUN: This is broken for bytes that start with 4 zero bits.
-		for (size_t i = 0, index = 0; i < payloadSize; ++i) {
-			uint8_t b = buf[i];
-			if (b == 0) {
-				index += 8;
-				continue;
-			}
-
-			uint8_t leading = CHAR_BIT - (sizeof(unsigned int) * CHAR_BIT - __builtin_clz(b));
-			uint8_t trailing = __builtin_ctz(b);
-
-			// skip leading zero bits first, we skip trailing zero bits later
-			index += leading;
-
-			// push this piece, we know it's there
-			pushPiece(index++);
-
-			for (b >>= trailing + (leading | 1); b != 0; b >>= 1, ++index)
-				if (b & 1)
-					pushPiece(index);
-
-			// skip trailing
-			index += trailing;
-		}
-#else
 		for (size_t i = 0; i < payloadSize; ++i) {
-			for (uint8_t x = 0; x < 8; ++x) {
+			for (size_t x = 0; x < 8; ++x) {
 				if (buf[i] & (1 << (7 - x))) {
-					size_t index = i * 8 + x;
-					if (index < m_torrent->totalPieces())
-						pushPiece(index);
+					size_t idx = i * 8 + x;
+					if (idx < m_torrent->fileManager()->totalPieces())
+						m_bitset.set(idx);
 				}
 			}
 		}
-#endif
 
 		if (!m_torrent->isFinished())
 			m_torrent->requestPiece(shared_from_this());
@@ -247,10 +213,15 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 		in >> length;
 
 		if (length > maxRequestSize)
-			return handleError("peer requested piece of size " + bytesToHumanReadable(length, true) + " which is beyond our max request size");
+			return handleError("peer requested block of length " + bytesToHumanReadable(length, true) + " which is beyond our max request size");
 
 		m_torrent->handlePeerDebug(shared_from_this(), "requested piece block of length " + bytesToHumanReadable(length, true));
-		m_torrent->handleRequestBlock(shared_from_this(), index, begin, length);
+		if (!m_torrent->handleRequestBlock(shared_from_this(), index, begin, length)) {
+			sendChoke();
+			break;
+		}
+
+		m_requestedBlocks.push_back(PieceBlockInfo(index, begin, length));
 		break;
 	}
 	case MT_PieceBlock:
@@ -276,9 +247,8 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 		if (blockIndex >= piece->numBlocks)
 			return handleError("received too big block index");
 
-		if (m_torrent->pieceDone(index)) {
-			m_torrent->handlePeerDebug(shared_from_this(), "cancelling " + std::to_string(index));
-			sendCancelRequest(piece);
+		if (m_torrent->fileManager()->pieceDone(index)) {
+			cancelPiece(piece);
 			m_queue.erase(it);
 			delete piece;
 		} else {
@@ -292,19 +262,13 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 					for (size_t y = 0; y < piece->blocks[x].size; ++y)
 						pieceData.add_unchecked(piece->blocks[x].data[y]);
 
-				bool cont = m_torrent->handlePieceCompleted(shared_from_this(), index, pieceData);
 				m_queue.erase(it);
 				delete piece;
 
-				if (cont) {
-					// We have to do this here, if we do it inside of handlePieceCompleted
-					// m_queue will fail us due to sendPieceRequest changing position
-					if (m_torrent->completedPieces() != m_torrent->totalPieces())
-						m_torrent->requestPiece(shared_from_this());
-				} else {
-					// sending malicious pieces?
-					return disconnect();
-				}
+				if (!m_torrent->handlePieceCompleted(shared_from_this(), index, std::move(pieceData)))
+					sendChoke();
+				else if (!m_torrent->isFinished())
+					m_torrent->requestPiece(shared_from_this());
 			}
 		}
 
@@ -320,7 +284,12 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 		in >> begin;
 		in >> length;
 
-		m_torrent->handlePeerDebug(shared_from_this(), "cancel");
+		auto it = std::find_if(m_requestedBlocks.begin(), m_requestedBlocks.end(),
+				[=] (const PieceBlockInfo &i) { return i.index == index
+									&& i.begin == begin
+									&& i.length == length; } );
+		if (it != m_requestedBlocks.end())
+			m_requestedBlocks.erase(it);
 		break;
 	}
 	case MT_Port:
@@ -341,18 +310,48 @@ void Peer::handleError(const std::string &errmsg)
 	disconnect();
 }
 
+void Peer::handlePieceBlockData(size_t index, size_t begin, const uint8_t *block, size_t size)
+{
+	// Check if piece block cancel was issued
+	auto it = std::find_if(m_requestedBlocks.begin(), m_requestedBlocks.end(),
+			[=] (const PieceBlockInfo &i) { return i.index == index && i.begin == begin; } );
+	if (it == m_requestedBlocks.end())
+		return;
+
+	m_requestedBlocks.erase(it);
+	if (!isLocalChoked() && isRemoteInterested())
+		sendPieceBlock(index, begin, block, size);
+}
+
 void Peer::sendKeepAlive()
 {
 	const uint8_t keepalive[] = { 0, 0, 0, 0 };
 	m_conn->write(keepalive, sizeof(keepalive));
+
+	// re-schedule
+	m_eventId = g_sched.addEvent(std::bind(&Peer::sendKeepAlive, shared_from_this()), KEEPALIVE_INTERVAL);
 }
 
-void Peer::sendBitfield(const std::vector<uint8_t> &payload)
+void Peer::sendChoke()
 {
-	OutputMessage out(ByteOrder::BigEndian, 5 + payload.size());
-	out << 1UL + payload.size();
+	const uint8_t choke[5] = { 0, 0, 0, 1, MT_Choke };
+	m_conn->write(choke, sizeof(choke));
+	m_state |= PS_AmChoked;
+}
+
+void Peer::sendUnchoke()
+{
+	const uint8_t unchoke[5] = { 0, 0, 0, 1, MT_UnChoke };
+	m_conn->write(unchoke, sizeof(unchoke));
+	m_state &= ~PS_AmChoked;
+}
+
+void Peer::sendBitfield(const uint8_t *bits, size_t size)
+{
+	OutputMessage out(ByteOrder::BigEndian, 5 + size);
+	out << 1UL + size;
 	out << (uint8_t)MT_Bitfield;
-	out.addBytes(&payload[0], payload.size());
+	out.addBytes(bits, size);
 
 	m_conn->write(out);
 }
@@ -370,7 +369,7 @@ void Peer::sendHave(uint32_t index)
 	m_conn->write(out);
 }
 
-void Peer::sendPieceBlock(uint32_t index, uint32_t begin, uint8_t *block, uint32_t length)
+void Peer::sendPieceBlock(uint32_t index, uint32_t begin, const uint8_t *block, size_t length)
 {
 	OutputMessage out(ByteOrder::BigEndian, 13 + length);
 	out << 9UL + length;	// length
@@ -386,7 +385,7 @@ void Peer::sendPieceRequest(uint32_t index)
 {
 	sendInterested();
 
-	uint32_t pieceLength = m_torrent->pieceSize(index);
+	uint32_t pieceLength = m_torrent->fileManager()->pieceSize(index);
 	size_t numBlocks = (int)(ceil(double(pieceLength) / maxRequestSize));
 
 	Piece *piece = new Piece();
@@ -420,10 +419,10 @@ void Peer::sendInterested()
 	m_state |= PS_AmInterested;
 }
 
-void Peer::sendCancelRequest(Piece *p)
+void Peer::cancelPiece(Piece *p)
 {
 	size_t begin = 0;
-	size_t length = m_torrent->pieceSize(p->index);
+	size_t length = m_torrent->fileManager()->pieceSize(p->index);
 	for (; length > maxRequestSize; length -= maxRequestSize, begin += maxRequestSize)
 		sendCancel(p->index, begin, maxRequestSize);
 	sendCancel(p->index, begin, length);
@@ -447,7 +446,7 @@ void Peer::requestPiece(size_t pieceIndex)
 		return handleError("Attempt to request piece from a peer that is remotely choked");
 
 	size_t begin = 0;
-	size_t length = m_torrent->pieceSize(pieceIndex);
+	size_t length = m_torrent->fileManager()->pieceSize(pieceIndex);
 	for (; length > maxRequestSize; length -= maxRequestSize, begin += maxRequestSize)
 		sendRequest(pieceIndex, begin, maxRequestSize);
 	sendRequest(pieceIndex, begin, length);

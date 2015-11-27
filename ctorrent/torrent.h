@@ -24,6 +24,8 @@
 
 #include "peer.h"
 #include "tracker.h"
+#include "torrentmeta.h"
+#include "torrentfilemanager.h"
 
 #include <boost/any.hpp>
 #include <bencode/bencode.h>
@@ -32,24 +34,17 @@
 #include <vector>
 #include <map>
 #include <string>
-#include <atomic>
 #include <chrono>
-#include <fstream>
 #include <iosfwd>
+
+#include <unordered_map>
+#include <unordered_set>
 
 static size_t maxRequestSize = 16384;		// 16KiB initial (per piece)
 class Torrent
 {
-private:
-	struct File {
-		std::string path;
-		FILE *fp;
-		int64_t begin;		// offset of which the piece(s) begin
-		int64_t length;
-	};
-
 public:
-	enum class DownloadError {
+	enum class DownloadState {
 		Completed		 = 0,
 		TrackerQueryFailure	 = 1,
 		AlreadyDownloaded	 = 2,
@@ -60,36 +55,38 @@ public:
 	~Torrent();
 
 	bool open(const std::string& fileName, const std::string &downloadDir);
-	DownloadError download(uint16_t port);
+	DownloadState download(uint16_t port);
 	bool seed(uint16_t port);
+	bool isFinished() const { return m_fileManager.totalPieces() == m_fileManager.completedPieces(); }
 
-	inline bool isFinished() const { return m_completedPieces == m_pieces.size(); }
-	inline size_t activePeers() const { return m_peers.size(); }
-	inline int64_t totalSize() const { return m_totalSize; }
-	inline int64_t downloadedBytes() const { return m_downloadedBytes; }
-	inline uint32_t uploadedBytes() const { return m_uploadedBytes; }
-	inline size_t totalPieces() const { return m_pieces.size(); }
-	inline size_t completedPieces() const { return m_completedPieces; }
-	inline std::string name() const { return m_name; }
+	size_t activePeers() const { return m_peers.size(); }
+	size_t downloadedBytes() const { return m_downloadedBytes; }
+	size_t uploadedBytes() const { return m_uploadedBytes; }
 
-	double eta() const;
-	double downloadSpeed() const;
-	clock_t elapsed() const;
+	double eta();
+	double downloadSpeed();
+	clock_t elapsed();
+
+	// Get associated meta info for this torrent
+	const TorrentMeta *meta() const { return &m_meta; }
+
+	// Get associated file manager for this torrent
+	const TorrentFileManager *fileManager() const { return &m_fileManager; }
 
 protected:
-	bool checkPieceHash(const uint8_t *data, size_t size, uint32_t index);
 	bool queryTrackers(const TrackerQuery &r, uint16_t port);
 	bool queryTracker(const std::string &url, const TrackerQuery &r, uint16_t port);
-	bool parseFile(Dictionary &&v, VectorType &&pathList, size_t &index, int64_t &begin);
 	void findCompletedPieces(const struct File *f, size_t index);
 	void rawConnectPeers(const uint8_t *peers, size_t size);
+	void rawConnectPeer(Dictionary &peerInfo);
 	void connectToPeers(const boost::any &peers);
 	void sendBitfield(const PeerPtr &peer);
 	void requestPiece(const PeerPtr &peer);
-	size_t computeDownloaded() const;
-	int64_t pieceSize(size_t pieceIndex) const;
-	inline bool pieceDone(size_t pieceIndex) const { return m_pieces[pieceIndex].done; }
 
+	TrackerQuery makeTrackerQuery(TrackerEvent event);
+	size_t computeDownloaded() { return m_fileManager.computeDownloaded(); }
+
+	void addBlacklist(uint32_t ip);
 	void addPeer(const PeerPtr &peer);
 	void removePeer(const PeerPtr &peer, const std::string &errmsg);
 	void disconnectPeers();
@@ -97,39 +94,31 @@ protected:
 	const uint8_t *peerId() const { return m_peerId; }
 	const uint8_t *handshake() const { return m_handshake; }
 
-	TrackerQuery makeTrackerQuery(TrackerEvent event) const;
+	// Peer -> Torrent
 	void handleTrackerError(Tracker *tracker, const std::string &error);
 	void handlePeerDebug(const PeerPtr &peer, const std::string &msg);
-	bool handlePieceCompleted(const PeerPtr &peer, uint32_t index, const DataBuffer<uint8_t> &data);
-	void handleRequestBlock(const PeerPtr &peer, uint32_t index, uint32_t begin, uint32_t length);
 	void handleNewPeer(const PeerPtr &peer);
+	bool handlePieceCompleted(const PeerPtr &peer, uint32_t index, DataBuffer<uint8_t> &&data);
+	bool handleRequestBlock(const PeerPtr &peer, uint32_t index, uint32_t begin, uint32_t length);
+
+public:
+	// TorrentFileManager -> Torrent
+	void onPieceWriteComplete(uint32_t from, uint32_t index);
+	void onPieceReadComplete(uint32_t from, uint32_t index, uint32_t begin, uint8_t *block, size_t size);
 
 private:
-	struct Piece {
-		bool done;
-		int32_t priority;
-		uint8_t hash[20];
-	};	
+	Server *m_listener;
+	TorrentMeta m_meta;
+	TorrentFileManager m_fileManager;
 
 	std::vector<Tracker *> m_activeTrackers;
-	std::vector<PeerPtr> m_peers;
-	std::vector<Piece> m_pieces;
-	std::vector<File> m_files;
+	std::unordered_map<uint32_t, PeerPtr> m_peers;
+	std::unordered_set<uint32_t> m_blacklisted;
 
-	size_t m_completedPieces;
 	size_t m_uploadedBytes;
 	size_t m_downloadedBytes;
 	size_t m_wastedBytes;
 	size_t m_hashMisses;
-
-	size_t m_pieceLength;
-	size_t m_totalSize;
-
-	Server *m_listener;
-	VectorType m_trackers;
-	std::string m_name;
-	std::string m_mainTracker;
-	std::string m_comment;
 
 	clock_t m_startTime;
 	uint8_t m_handshake[68];

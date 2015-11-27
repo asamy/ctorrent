@@ -28,6 +28,8 @@
 #include <memory>
 #include <vector>
 
+#include <util/bitset.h>
+
 class Torrent;
 class Peer : public std::enable_shared_from_this<Peer>
 {
@@ -64,26 +66,31 @@ public:
 	void connect(const std::string &ip, const std::string &port);
 
 protected:
+	// Process piece blocks requested, send keepalive, etc.
+	void process();
+	// Used only in server verification (e.g. peer connected to us)
 	void verify();
+
 	void handle(const uint8_t *data, size_t size);
 	void handleMessage(MessageType mType, InputMessage in);
-	void handleError(const std::string &);
+	void handleError(const std::string &errmsg);
+	void handlePieceBlockData(size_t index, size_t begin, const uint8_t *block, size_t size);
 
 	void sendKeepAlive();
-	void sendBitfield(const std::vector<uint8_t> &payload);
+	void sendChoke();
+	void sendUnchoke();
+	void sendBitfield(const uint8_t *bits, size_t size);
 	void sendHave(uint32_t index);
-	void sendPieceBlock(uint32_t index, uint32_t begin, uint8_t *block, uint32_t size);
+	void sendPieceBlock(uint32_t index, uint32_t begin, const uint8_t *block, size_t size);
 	void sendPieceRequest(uint32_t index);
 	void sendRequest(uint32_t index, uint32_t begin, uint32_t size);
 	void sendInterested();
-	void sendCancelRequest(Piece *p);
 	void sendCancel(uint32_t index, uint32_t begin, uint32_t size);
 
 	void requestPiece(size_t pieceIndex);
-	inline std::vector<size_t> getPieces() const { return m_pieces; }
-	inline void pushPiece(size_t i) { m_pieces.push_back(i); }
-	inline bool hasPiece(size_t index) { return std::find(m_pieces.begin(), m_pieces.end(), index) != m_pieces.end(); }
+	void cancelPiece(Piece *p);
 
+	inline bool hasPiece(size_t i) const { return m_bitset.test(i); }
 	inline bool isRemoteChoked() const { return test_bit(m_state, PS_PeerChoked); }
 	inline bool isLocalChoked() const  { return test_bit(m_state, PS_AmChoked); }
 
@@ -108,10 +115,34 @@ private:
 		PieceBlock *blocks;
 	};
 
-	std::vector<size_t> m_pieces;
+	struct PieceBlockInfo {
+		size_t index;
+		size_t begin;
+		size_t length;
+
+		PieceBlockInfo(size_t i, int64_t beg, int64_t len)
+			: index(i),
+			  begin(beg),
+			  length(len)
+		{
+		}
+
+		bool operator==(const PieceBlockInfo &other) const
+		{
+			return other.index == index
+				&& other.begin == begin
+				&& other.length == length;
+		}
+	};
+
+	bitset m_bitset;
 	std::vector<Piece *> m_queue;
+	std::vector<PieceBlockInfo> m_requestedBlocks;
 	std::string m_peerId;
+
 	uint8_t m_state;
+	uint32_t m_eventId;
+
 	Torrent *m_torrent;
 	ConnectionPtr m_conn;
 

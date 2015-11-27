@@ -26,6 +26,9 @@
 #include <limits.h>
 #include <stdint.h>
 #include <string.h>
+#ifdef _MSC_VER
+#include <intrin.h>
+#endif
 
 class bitset {
 public:
@@ -48,11 +51,13 @@ public:
 		memset(m_bits, 0x00, m_size);
 	}
 
-	bool test(size_t i) const { return !!(bitsAt(i) & (1 << (i % CHAR_BIT))); }
-	void set(size_t i) { bitsAt(i) |= (1 << (i % CHAR_BIT)); }
-	void set(size_t i, bool v) { bitsAt(i) ^= ((int)-v ^ bitsAt(i)) & (1 << (i % CHAR_BIT)); }
-	void clear(size_t i) { bitsAt(i) &= ~(1 << (i % CHAR_BIT)); }
-	void toggle(size_t i) { bitsAt(i) ^= (1 << (i % CHAR_BIT)); }
+	// simply modulus by 8 but since this is a bitset lets keep this all
+	// bit relevant
+	bool test(size_t i) const { return !!(bitsAt(i) & (1 << (i & 7))); }
+	void set(size_t i) { bitsAt(i) |= (1 << (i & 7)); }
+	void set(size_t i, bool v) { bitsAt(i) ^= ((int)-v ^ bitsAt(i)) & (1 << (i & 7)); }
+	void clear(size_t i) { bitsAt(i) &= ~(1 << (i & 7)); }
+	void toggle(size_t i) { bitsAt(i) ^= (1 << (i & 7)); }
 
 	bool operator[] (size_t i) { return test(i); }
 	bool operator[] (size_t i) const { return test(i); }
@@ -64,6 +69,8 @@ public:
 	{
 #ifdef __GNUC__
 		return __builtin_popcount(v);
+#elif _MSC_VER
+		return __popcnt64(v);
 #else
 		// Hamming Weight
 		v = v - ((v >> 1) & 0x5555555555555555);
@@ -99,8 +106,10 @@ public:
 		return set;
 	}
 
-	uint8_t bitsAt(int i) const { return m_bits[i / CHAR_BIT]; }
-	uint8_t &bitsAt(int i) { return m_bits[i / CHAR_BIT]; }
+	// Simply division by 8 but since this is a bitset let's keep it all
+	// bit relevant
+	uint8_t bitsAt(int i) const { return m_bits[i >> 3]; }
+	uint8_t &bitsAt(int i) { return m_bits[i >> 3]; }
 
 	void raw_set(const uint8_t *bits, size_t size)
 	{

@@ -12,12 +12,12 @@ LIBS = -fopenmp -lboost_system-mt -lboost_program_options-mt
 ifeq ($(OS),Windows_NT)
 LIBS += -lws2_32 -lshlwapi
 else
-LIBS += -lpthread
+LIBS += -pthread
 endif
 
 OBJ_DIR = obj
 SRC = bencode/decoder.cpp bencode/encoder.cpp \
-	ctorrent/tracker.cpp ctorrent/peer.cpp ctorrent/torrent.cpp \
+	ctorrent/tracker.cpp ctorrent/peer.cpp ctorrent/torrentmeta.cpp ctorrent/torrentfilemanager.cpp ctorrent/torrent.cpp \
 	net/server.cpp net/connection.cpp net/inputmessage.cpp net/outputmessage.cpp \
 	util/auxiliar.cpp util/scheduler.cpp \
 	main.cpp

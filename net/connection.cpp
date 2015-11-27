@@ -194,10 +194,7 @@ void Connection::handleConnect(const boost::system::error_code &e)
 
 void Connection::handleError(const boost::system::error_code &error)
 {
-	if (error == asio::error::operation_aborted)
-		return;
-
-	if (m_eh)
+	if (error == asio::error::operation_aborted && m_eh)
 		m_eh(error.message());
 }
 

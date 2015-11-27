@@ -41,17 +41,17 @@ Scheduler g_sched;
 struct SchedulerEvent {
 	SchedulerEvent(const SchedulerCallback &cb, uint32_t ms)
 	{
-		static uint32_t lastId = 0;
+		static uint32_t lastId = 1;
 		m_eventId = lastId++;
 		m_callback = cb;
 		m_expiry = std::chrono::system_clock::now()
 			+ std::chrono::milliseconds(ms);
-
 	}
 	~SchedulerEvent() { m_callback = nullptr; }
 
 	uint32_t id() const { return m_eventId; }
 	SchedulerCallback callback() const { return m_callback; }
+	bool expired() const { return std::chrono::system_clock::now() >= m_expiry; }
 	std::chrono::time_point<std::chrono::system_clock> expiry() const { return m_expiry; }
 
 private:
@@ -62,7 +62,7 @@ private:
 
 struct SchedulerLess {
 	bool operator() (const SchedulerEvent &lhs, const SchedulerEvent &rhs) const {
-		return lhs.expiry() < rhs.expiry();
+		return lhs.expiry() > rhs.expiry();
 	}
 };
 
@@ -135,7 +135,6 @@ void Scheduler::stopEvent(uint32_t id)
 
 void Scheduler::stop()
 {
-	i->stop();
 	delete i;
 	i = nullptr;
 }
@@ -145,12 +144,10 @@ void SchedulerImpl::dispatcherThread()
 	std::unique_lock<std::mutex> m(mutex, std::defer_lock);
 
 	while (!m_stopped) {
-		bool cont = m_condition.wait_until(m, std::chrono::system_clock::now()
-				+ std::chrono::milliseconds(10), [this] () { return !m_queue.empty(); } );
+		m.lock();
+		m_condition.wait(m, [this] () { return !m_queue.empty() || m_stopped; } );
 		if (m_stopped)
 			break;
-		else if (!cont)
-			continue;
 
 		while (!m_queue.empty()) {
 			SchedulerCallback ec = m_queue.front();
@@ -158,6 +155,7 @@ void SchedulerImpl::dispatcherThread()
 
 			ec();
 		}
+		m.unlock();
 	}
 }
 
@@ -166,15 +164,22 @@ void SchedulerImpl::thread()
 	std::unique_lock<std::mutex> m(mutex, std::defer_lock);
 
 	while (!m_stopped) {
+		m.lock();
 		if (events.empty()) {
 			m_condition.wait(m);
 			if (m_stopped)
 				break;
 		}
-	
-		m_condition.wait_until(m, events.top().expiry());
+
+		// Ugly hack for newly added events
+		bool cont = m_condition.wait_until(m, std::chrono::system_clock::now()
+				+ std::chrono::milliseconds(1), [this] () { return events.top().expired(); });
 		if (m_stopped)
 			break;
+		else if (!cont) {
+			m.unlock();
+			continue;
+		}
 
 		SchedulerEvent e = events.top();
 		events.pop();
@@ -182,10 +187,12 @@ void SchedulerImpl::thread()
 		auto it = pendingRemoval.find(e.id());
 		if (it != pendingRemoval.end()) {
 			pendingRemoval.erase(it);
+			m.unlock();
 			continue;
 		}
 
 		m_queue.push(e.callback());
+		m.unlock();
 		m_condition.notify_all();
 	}
 }
