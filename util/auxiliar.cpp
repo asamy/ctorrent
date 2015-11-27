@@ -32,11 +32,14 @@
 #include <iostream>
 #include <stdexcept>
 
+#include <boost/filesystem.hpp>
+
 #ifdef _WIN32
 #include <ws2tcpip.h>
 #else
 #include <arpa/inet.h>
 #endif
+
 
 UrlData parseUrl(const std::string &str)
 {
@@ -164,22 +167,10 @@ std::string urlencode(const std::string &value)
 
 bool validatePath(const std::string &base, const std::string &path)
 {
-	char absolutePath[PATH_MAX + 1];
-#ifdef _WIN32
-	if (!_fullpath(absolutePath, path.c_str(), PATH_MAX))
-		return false;
-#else
-// FIXME
-//	if (!realpath(path.c_str(), absolutePath))
-	return true;
-#endif
+	boost::filesystem::path p1(path);
+	boost::filesystem::path p2(base);
 
-	if (strlen(absolutePath) < base.length())
-		throw std::runtime_error("path is too short");
-	else if (base != std::string(absolutePath).substr(0, base.length()))
-		throw std::runtime_error("path mismatch");
-
-	return true;
+	return p1.parent_path() == p2.parent_path();
 }
 
 bool nodeExists(const std::string &node)

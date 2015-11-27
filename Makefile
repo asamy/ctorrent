@@ -8,7 +8,7 @@ CXX = g++
 BTYPE = -g3 -ggdb3 -O0 -D_DEBUG
 CXXFLAGS = -std=c++11 $(DEPFLAGS) $(BTYPE) -fopenmp -Wall -Wextra -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter -I"."
 
-LIBS = -fopenmp -lboost_system-mt -lboost_program_options-mt 
+LIBS = -fopenmp -lboost_system-mt -lboost_filesystem-mt -lboost_program_options-mt 
 ifeq ($(OS),Windows_NT)
 LIBS += -lws2_32 -lshlwapi
 else
