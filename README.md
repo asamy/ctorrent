@@ -1,6 +1,7 @@
 # CTorrent
 
 CTorrent is a torrent client written in C++11 with some help from Boost.
+![img](https://i.imgur.com/WcjjLG5.png)
 
 ## Requirements
 

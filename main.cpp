@@ -25,6 +25,7 @@
 
 #include <thread>
 #include <functional>
+#include <chrono>
 #include <iostream>
 
 #include <boost/program_options.hpp>
@@ -223,17 +224,13 @@ int main(int argc, char *argv[])
 	}
 
 	if (!nodownload && started > 0) {
-		int last = 0;
 		while (completed != total - errors) {
 			if (errors == total)
 				break;
 
 			Connection::poll();
 			print_all_stats(torrents, total);
-			if (last == completed)
-				continue;
-
-			last = completed;
+			std::this_thread::sleep_for(std::chrono::milliseconds(5));
 		}
 	}
 
@@ -241,6 +238,7 @@ int main(int argc, char *argv[])
 		while (eseed != total) {
 			Connection::poll();
 			print_all_stats(torrents, total);
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		}
 	}
 
