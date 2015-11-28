@@ -456,10 +456,8 @@ bool TorrentFileManager::registerFiles(const std::string &baseDir, const Torrent
 
 		if (inf.path != filePath) {
 			std::string path = baseDir + filePath;
-			if (!validatePath(baseDir, path)) {
-				std::clog << "Error validating dir: " << path << std::endl;
+			if (!validatePath(baseDir, path))
 				return false;
-			}
 
 			if (!nodeExists(path))
 				MKDIR(path);

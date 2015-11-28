@@ -45,14 +45,19 @@ struct TrackerQuery {
 class Torrent;
 class Tracker
 {
+	enum TrackerType {
+		TrackerHTTP,
+		TrackerUDP,
+	};
+
 public:
 	Tracker(Torrent *torrent, const std::string &host, const std::string &port, const std::string &proto, uint16_t tport)
 		: m_torrent(torrent),
 		  m_tport(tport),
 		  m_host(host),
-		  m_port(port),
-		  m_prot(proto)
+		  m_port(port)
 	{
+		m_type = proto == "http" ? TrackerHTTP : TrackerUDP;
 	}
 
 	std::string host() const { return m_host; }
@@ -71,10 +76,10 @@ private:
 	Torrent *m_torrent;
 	TimePoint m_timeToNextRequest;
 
+	TrackerType m_type;
 	uint16_t m_tport;
 	std::string m_host;
 	std::string m_port;
-	std::string m_prot;
 
 	friend class Torrent;
 };

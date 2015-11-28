@@ -27,7 +27,7 @@
 bool Tracker::query(const TrackerQuery &req)
 {
 	bool ret = false;
-	if (m_prot == "http")
+	if (m_type == TrackerHTTP)
 		ret = httpRequest(req);
 	else
 		ret = udpRequest(req);
