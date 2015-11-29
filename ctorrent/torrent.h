@@ -76,7 +76,6 @@ public:
 protected:
 	bool queryTrackers(const TrackerQuery &r, uint16_t port);
 	bool queryTracker(const std::string &url, const TrackerQuery &r, uint16_t port);
-	void findCompletedPieces(const struct File *f, size_t index);
 	void rawConnectPeers(const uint8_t *peers, size_t size);
 	void rawConnectPeer(Dictionary &peerInfo);
 	void connectToPeers(const boost::any &peers);
