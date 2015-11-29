@@ -96,7 +96,7 @@ void Connection::write(const uint8_t *bytes, size_t size)
 		g_connectionLock.unlock();
 
 		m_delayedWriteTimer.cancel();
-		m_delayedWriteTimer.expires_from_now(boost::posix_time::milliseconds(0));
+		m_delayedWriteTimer.expires_from_now(boost::posix_time::milliseconds(10));
 		m_delayedWriteTimer.async_wait(std::bind(&Connection::internalWrite, shared_from_this(), std::placeholders::_1));
 	}
 
