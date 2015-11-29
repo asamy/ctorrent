@@ -350,9 +350,6 @@ bool Torrent::handlePieceCompleted(const PeerPtr &peer, uint32_t index, DataBuff
 {
 	uint32_t downloaded = data.size();
 	if (m_fileManager.writePieceBlock(index, peer->ip(), std::move(data))) {
-		for (const auto &it : m_peers)
-			it.second->sendHave(index);
-
 		m_downloadedBytes += downloaded;
 		return true;
 	}
@@ -369,6 +366,8 @@ bool Torrent::handleRequestBlock(const PeerPtr &peer, uint32_t index, uint32_t b
 
 void Torrent::onPieceWriteComplete(uint32_t from, uint32_t index)
 {
+	for (const auto &it : m_peers)
+		it.second->sendHave(index);
 }
 
 void Torrent::onPieceReadComplete(uint32_t from, uint32_t index, uint32_t begin, uint8_t *block, size_t size)
