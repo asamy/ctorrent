@@ -76,6 +76,11 @@ static void set_color(int col)
 	set_color(COL_BLACK);	\
 } while (0)
 #else
+enum {
+	COL_GREEN = 1,
+	COL_YELLOW = 2,
+};
+
 #define printc(c, fmt, args...)	do {	\
 	attron(COLOR_PAIR(c));	\
 	printw(fmt, ##args);	\
@@ -87,10 +92,12 @@ static void print_stats(Torrent *t)
 	const TorrentMeta *meta = t->meta();
 	const TorrentFileManager *fm = t->fileManager();
 
-	printc(1, "%s: ", meta->name().c_str());
-	printc(2, "%.2f Mbps (%zd / %zd downloaded) ",
-			t->downloadSpeed(), t->downloadedBytes(), meta->totalSize());
-	printc(2, "[ %d/%d pieces %d peers active ]\n", fm->completedPieces(), fm->totalPieces(), t->activePeers());
+	printc(COL_GREEN, "%s: ", meta->name().c_str());
+	printc(COL_YELLOW, "%.2f Mbps (%zd / %zd downloaded - %.2f seconds left) ",
+				t->downloadSpeed(), t->downloadedBytes(), meta->totalSize(),
+				t->eta());
+	printc(COL_YELLOW, "[ %d/%d pieces %d peers active ]\n",
+				fm->completedPieces(), fm->totalPieces(), t->activePeers());
 }
 
 static void print_all_stats(Torrent *torrents, size_t total)
