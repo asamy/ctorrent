@@ -62,6 +62,8 @@ public:
 	size_t activePeers() const { return m_peers.size(); }
 	size_t downloadedBytes() const { return m_downloadedBytes; }
 	size_t uploadedBytes() const { return m_uploadedBytes; }
+	size_t wastedBytes() const { return m_wastedBytes; }
+	size_t hashMisses() const { return m_hashMisses; }
 
 	double eta();
 	double downloadSpeed();

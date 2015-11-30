@@ -93,10 +93,10 @@ static void print_stats(Torrent *t)
 	const TorrentFileManager *fm = t->fileManager();
 
 	printc(COL_GREEN, "%s: ", meta->name().c_str());
-	printc(COL_YELLOW, "%.2f Mbps (%zd / %zd downloaded - %.2f seconds left) ",
+	printc(COL_YELLOW, "%.2f Mbps (%zd / %zd downloaded %zd hash miss, %zd wasted - %.2f seconds left) ",
 				t->downloadSpeed(), t->downloadedBytes(), meta->totalSize(),
-				t->eta());
-	printc(COL_YELLOW, "[ %d/%d pieces %d peers active ]\n",
+				t->hashMisses(), t->wastedBytes(), t->eta());
+	printc(COL_YELLOW, "[ %d/%d pieces %d peers active]\n",
 				fm->completedPieces(), fm->totalPieces(), t->activePeers());
 }
 
