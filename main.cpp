@@ -199,7 +199,10 @@ int main(int argc, char *argv[])
 
 		const TorrentMeta *meta = t->meta();
 		if (nodownload) {
+			const TorrentFileManager *fm = t->fileManager();
+
 			std::clog << meta->name() << ": Total size: " << bytesToHumanReadable(meta->totalSize(), true) << std::endl;
+			std::clog << meta->name() << ": Completed pieces: " << fm->completedPieces() << "/" << fm->totalPieces() << std::endl;
 			continue;
 		}
 
