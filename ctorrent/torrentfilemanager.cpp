@@ -91,7 +91,8 @@ public:
 	void push_read(const ReadRequest &r) { m_readRequests.push(r); }
 	void push_write(WriteRequest &&w) { m_writeRequests.push(std::move(w)); }
 	void push_file(const TorrentFile &f) { m_files.push_back(f); }
-	void scan_file(const TorrentFile *f);
+	void scan_file(const TorrentFile &f);
+	void scan_pieces();
 
 	const bitset *completed_bits() const { return &m_completedBits; }
 	size_t completed_pieces() const { return m_completedBits.count(); }
@@ -164,36 +165,36 @@ private:
 	friend class TorrentFileManager;
 };
 
-void TorrentFileManagerImpl::scan_file(const TorrentFile *f)
+void TorrentFileManagerImpl::scan_file(const TorrentFile &f)
 {
-	FILE *fp = f->fp;
+	FILE *fp = f.fp;
 	fseek(fp, 0L, SEEK_END);
-	off_t fileLength = ftello(fp);
+	off64_t fileLength = ftello64(fp);
 	fseek(fp, 0L, SEEK_SET);
 
-	if (fileLength > f->info.length) {
-		truncate(f->info.path.c_str(), f->info.length);
+	if (f.info.length > fileLength) {
+		truncate(f.info.path.c_str(), f.info.length);
 		return;
 	}
 
 	size_t m_pieceLength = m_torrent->meta()->pieceLength();
 	size_t pieceIndex = 0;
-	if (f->info.begin > 0)
-		pieceIndex = f->info.begin / m_pieceLength;
+	if (f.info.begin > 0)
+		pieceIndex = f.info.begin / m_pieceLength;
 
 	size_t pieceBegin = pieceIndex * m_pieceLength;
 	size_t pieceLength = piece_length(pieceIndex);
-	size_t fileEnd = f->info.begin + f->info.length;
+	size_t fileEnd = f.info.begin + f.info.length;
 	if (pieceBegin + pieceLength > fileEnd)
 		return;
 
 	uint8_t buf[m_pieceLength];
-	if (pieceBegin < f->info.begin) {
-		size_t bufPos = f->info.begin - pieceBegin;
+	if (pieceBegin < f.info.begin) {
+		size_t bufPos = f.info.begin - pieceBegin;
 		if (fread(&buf[bufPos], 1, m_pieceLength - bufPos, fp) != m_pieceLength - bufPos)
 			return;
 
-		size_t index = f->info.index;
+		size_t index = f.info.index;
 		while (bufPos != 0) {
 			TorrentFile *cf = &m_files[--index];
 			FILE *fpp = cf->fp;
@@ -219,7 +220,7 @@ void TorrentFileManagerImpl::scan_file(const TorrentFile *f)
 		++pieceIndex;
 	}
 
-	fseek(fp, pieceBegin - f->info.begin, SEEK_SET);
+	fseek(fp, pieceBegin - f.info.begin, SEEK_SET);
 	size_t real = pieceIndex;
 	bool escape = false;
 #pragma omp parallel for
@@ -248,6 +249,12 @@ void TorrentFileManagerImpl::scan_file(const TorrentFile *f)
 		if (is_write_eligible(pieceIndex, &buf[0], pieceLength))
 			m_completedBits.set(pieceIndex);
 	}
+}
+
+void TorrentFileManagerImpl::scan_pieces()
+{
+	for (const TorrentFile &f : m_files)
+		scan_file(f);
 }
 
 void TorrentFileManagerImpl::thread()
@@ -463,8 +470,7 @@ bool TorrentFileManager::registerFiles(const std::string &baseDir, const Torrent
 				MKDIR(path);
 		}
 
-		bool scan = nodeExists(fullPath);
-		if (!scan) {
+		if (!nodeExists(fullPath)) {
 			// touch
 			FILE *fp = fopen(fullPath.c_str(), "wb");
 			if (!fp)
@@ -483,12 +489,9 @@ bool TorrentFileManager::registerFiles(const std::string &baseDir, const Torrent
 			.info = inf
 		};
 		i->push_file(f);
-		if (scan)
-			i->scan_file(&f);
-		else
-			truncate(fullPath.c_str(), inf.length);
 	}
 
+	i->scan_pieces();
 	std::clog << "Pieces: " << i->completed_pieces() << "/" << i->total_pieces() << std::endl;
 	return true;
 }
