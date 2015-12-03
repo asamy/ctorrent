@@ -57,6 +57,8 @@ public:
 			return;
 
 		memcpy(bits, m_bits, size);
+		free(m_bits);
+
 		m_bits = bits;
 		m_size = size;
 	}
