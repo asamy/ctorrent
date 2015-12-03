@@ -252,10 +252,19 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 			m_queue.erase(it);
 			delete piece;
 		} else {
-			piece->blocks[blockIndex].size = payloadSize;
-			piece->blocks[blockIndex].data = in.getBuffer(payloadSize);
+			PieceBlock *block = &piece->blocks[blockIndex];
+			uint8_t *payload = in.getBuffer(payloadSize);
+			if (block->rpos != 0) {
+				memcpy(block->data, payload, std::max(payloadSize, block->size - block->rpos));
+				free(payload);
+				block->rpos += payloadSize;
+			} else {
+				block->size = block->rpos = payloadSize;
+				block->data = payload;
+				++piece->currentBlocks;
+			}
 
-			if (++piece->currentBlocks == piece->numBlocks) {
+			if (piece->currentBlocks == piece->numBlocks) {
 				DataBuffer<uint8_t> pieceData;
 				pieceData.reserve(piece->numBlocks * maxRequestSize);	// just a prediction could be bit less
 				for (size_t x = 0; x < piece->numBlocks; ++x)

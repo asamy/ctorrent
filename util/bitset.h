@@ -50,6 +50,16 @@ public:
 		m_bits = new uint8_t[m_size];
 		memset(m_bits, 0x00, m_size);
 	}
+	void resize(size_t size)
+	{
+		uint8_t *bits = new uint8_t[size];
+		if (!bits)
+			return;
+
+		memcpy(bits, m_bits, size);
+		m_bits = bits;
+		m_size = size;
+	}
 
 	// simply modulus by 8 but since this is a bitset lets keep this all
 	// bit relevant

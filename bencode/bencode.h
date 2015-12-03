@@ -91,7 +91,7 @@ protected:
 		return true;
 	}
 
-	void internalWriteString(const std::string&);
+	void internalWriteString(const std::string &);
 
 private:
 	DataBuffer<char> m_buffer;

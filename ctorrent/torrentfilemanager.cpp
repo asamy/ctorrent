@@ -200,7 +200,7 @@ void TorrentFileManagerImpl::scan_file(const TorrentFile &f)
 			FILE *fpp = cf->fp;
 
 			if (bufPos > cf->info.length) {
-				if (fread(&buf[bufPos - cf->info.length], 1, cf->info.length, fpp) != cf->info.length)
+				if (fread(&buf[bufPos - cf->info.length], 1, bufPos, fpp) != cf->info.length)
 					return;
 
 				bufPos -= cf->info.length;

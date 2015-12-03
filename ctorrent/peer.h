@@ -100,9 +100,10 @@ protected:
 private:
 	struct PieceBlock {
 		size_t size;
+		size_t rpos;
 		uint8_t *data;
 
-		PieceBlock() { data = nullptr; size = 0; }
+		PieceBlock() { data = nullptr; size = rpos = 0; }
 		~PieceBlock() { delete []data; }
 	};
 

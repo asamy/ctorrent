@@ -173,7 +173,7 @@ void SchedulerImpl::thread()
 
 		// Ugly hack for newly added events
 		bool cont = m_condition.wait_until(m, std::chrono::system_clock::now()
-				+ std::chrono::milliseconds(1), [this] () { return events.top().expired(); });
+				+ std::chrono::milliseconds(5), [this] () { return events.top().expired(); });
 		if (m_stopped)
 			break;
 		else if (!cont) {
