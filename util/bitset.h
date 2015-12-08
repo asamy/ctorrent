@@ -57,7 +57,7 @@ public:
 			return;
 
 		memcpy(bits, m_bits, size);
-		free(m_bits);
+		delete []m_bits;
 
 		m_bits = bits;
 		m_size = size;
@@ -125,7 +125,7 @@ public:
 
 	void raw_set(const uint8_t *bits, size_t size)
 	{
-		m_size = size;
+		assert(size <= m_size);
 		memcpy(&m_bits[0], bits, size);
 	}
 

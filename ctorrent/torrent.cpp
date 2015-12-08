@@ -335,7 +335,7 @@ void Torrent::sendBitfield(const PeerPtr &peer)
 	uint8_t bits[b->size()];
 	for (size_t i = 0; i < b->size(); ++i)
 		if (b->test(i))
-			bits[i >> 3] = b->bitsAt(i) | (1 << (7 - (i & 7)));
+			bits[i] = b->bitsAt(i) | (1 << (7 - (i & 7)));
 	peer->sendBitfield(&bits[0], b->size());
 }
 
