@@ -492,7 +492,6 @@ bool TorrentFileManager::registerFiles(const std::string &baseDir, const Torrent
 	}
 
 	i->scan_pieces();
-	std::clog << "Pieces: " << i->completed_pieces() << "/" << i->total_pieces() << std::endl;
 	return true;
 }
 

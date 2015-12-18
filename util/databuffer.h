@@ -31,6 +31,7 @@ public:
 
 	inline size_t size() const { return m_size; }
 	inline size_t cap() const { return m_capacity; }
+	inline size_t rem() const { return cap() - size(); }
 	inline T *data() const { return m_buffer; }
 
 	inline const T &operator[](size_t i) const
