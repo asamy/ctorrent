@@ -34,20 +34,6 @@
 #include <ncurses.h>
 #endif
 
-static void print_help(const char *p)
-{
-	std::clog << "Usage: " << p << " <options...> <torrent...>" << std::endl;
-	std::clog << "Mandatory arguments to long options are mandatory for short options too." << std::endl;
-	std::clog << "\t\t--version (-v), --help (-h) 	print version and help respectively then exit" << std::endl;
-	std::clog << "\t\t--nodownload (-n)		Just check pieces completed, torrent size, etc." << std::endl;
-	std::clog << "\t\t--piecesize (-s)		Specify piece size in KB, this will be rounded to the nearest power of two.  Default is 16 KB" << std::endl;
-	std::clog << "\t\t--port (-p)			Not yet fully implemented." << std::endl;
-	std::clog << "\t\t--dldir (-d)			Specify downloads directory." << std::endl;
-	std::clog << "\t\t--noseed (-e)			Do not seed after download has finished." << std::endl;
-	std::clog << "\t\t--torrents (-t) 		Specify torrent file(s)." << std::endl;
-	std::clog << "Example: " << p << " --nodownload --torrents a.torrent b.torrent c.torrent" << std::endl;
-}
-
 #ifdef _WIN32
 enum {
 	COL_BLACK = 0,
@@ -140,7 +126,8 @@ int main(int argc, char *argv[])
 		("torrents,t", po::value<std::vector<std::string>>(&files)->required()->multitoken(), "specify torrent file(s)");
 
 	if (argc == 1) {
-		print_help(argv[0]);
+		std::clog << opts << std::endl;
+		std::clog << "Example: " << argv[0] << " --nodownload --torrents a.torrent b.torrent c.torrent" << std::endl;
 		return 1;
 	}
 
@@ -150,12 +137,14 @@ int main(int argc, char *argv[])
 		po::notify(vm);
 	} catch (const std::exception &e) {
 		std::cerr << argv[0] << ": error parsing command line arguments: " << e.what() << std::endl;
-		print_help(argv[0]);
+		std::clog << opts << std::endl;
+		std::clog << "Example: " << argv[0] << " --nodownload --torrents a.torrent b.torrent c.torrent" << std::endl;
 		return 1;
 	}
 
 	if (vm.count("help")) {
-		print_help(argv[0]);
+		std::clog << opts << std::endl;
+		std::clog << "Example: " << argv[0] << " --nodownload --torrents a.torrent b.torrent c.torrent" << std::endl;
 		return 0;
 	}
 
