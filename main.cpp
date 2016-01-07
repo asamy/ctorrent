@@ -175,7 +175,6 @@ int main(int argc, char *argv[])
 	size_t started = 0;
 
 	Torrent torrents[total];
-	std::thread threads[total];
 	for (size_t i = 0; i < files.size(); ++i) {
 		std::string file = files[i];
 		Torrent *t = &torrents[i];
@@ -195,31 +194,18 @@ int main(int argc, char *argv[])
 			continue;
 		}
 
-		++started;
-		threads[i] = std::thread([t, meta, &startport, &completed, &errors, &eseed, noseed]() {
-			uint16_t tport = startport++;
-			Torrent::DownloadState error = t->download(tport);
-			switch (error) {
-			case Torrent::DownloadState::Completed:
-				++completed;
-				break;
-			case Torrent::DownloadState::AlreadyDownloaded:
-				++completed;
-				break;
-			case Torrent::DownloadState::NetworkError:
-				++errors;
-				break;
-			case Torrent::DownloadState::TrackerQueryFailure:
-				++errors;
-				break;
-			}
-
-			if (!noseed
-				&& (error == Torrent::DownloadState::Completed || error == Torrent::DownloadState::AlreadyDownloaded)
-				&& !t->seed(tport))
-				++eseed;
-		});
-		threads[i].detach();
+		Torrent::DownloadState state = t->prepare(startport++);
+		switch (state) {
+		case Torrent::DownloadState::None:
+			++started;
+			break;
+		case Torrent::DownloadState::Completed:
+			++completed;
+			break;
+		default:
+			++errors;
+			break;
+		}
 	}
 
 	if (!nodownload && started > 0) {
@@ -227,17 +213,29 @@ int main(int argc, char *argv[])
 			if (errors == total)
 				break;
 
+			Torrent *t = &torrents[completed];
+			if (t->hasTrackers() && t->isFinished())
+				t->finish();
+			else
+				t->checkTrackers();
+
 			Connection::poll();
 			print_all_stats(torrents, total);
 			std::this_thread::sleep_for(std::chrono::milliseconds(5));
 		}
 	}
 
-	if (!noseed) {
-		while (eseed != total) {
+	if (!noseed && completed > 0) {
+		for (int i = 0; i < total; ++i) {
+			Torrent *t = &torrents[i];
+			if (!t->hasTrackers() && t->prepare(startport - i) > Torrent::DownloadState::Completed)
+				++eseed;
+		}
+
+		while (eseed != total) {	
 			Connection::poll();
 			print_all_stats(torrents, total);
-			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			std::this_thread::sleep_for(std::chrono::milliseconds(5));
 		}
 	}
 

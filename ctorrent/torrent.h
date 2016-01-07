@@ -45,19 +45,23 @@ class Torrent
 {
 public:
 	enum class DownloadState {
-		Completed		 = 0,
-		TrackerQueryFailure	 = 1,
-		AlreadyDownloaded	 = 2,
-		NetworkError		 = 3
+		None			 = 0,
+		Completed		 = 1,
+		TrackerQueryFailure	 = 2,
+		AlreadyDownloaded	 = 3,
+		NetworkError		 = 4
 	};
 
 	Torrent();
 	~Torrent();
 
+	DownloadState prepare(uint16_t port);
+	void checkTrackers();
 	bool open(const std::string& fileName, const std::string &downloadDir);
-	DownloadState download(uint16_t port);
 	bool seed(uint16_t port);
+	bool finish();
 	bool isFinished() const { return m_fileManager.totalPieces() == m_fileManager.completedPieces(); }
+	bool hasTrackers() const { return !m_activeTrackers.empty(); }
 
 	size_t activePeers() const { return m_peers.size(); }
 	size_t downloadedBytes() const { return m_downloadedBytes; }

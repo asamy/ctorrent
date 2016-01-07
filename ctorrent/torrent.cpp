@@ -116,7 +116,7 @@ TrackerQuery Torrent::makeTrackerQuery(TrackerEvent event)
 	return q;
 }
 
-Torrent::DownloadState Torrent::download(uint16_t port)
+Torrent::DownloadState Torrent::prepare(uint16_t port)
 {
 	if (isFinished())
 		return DownloadState::AlreadyDownloaded;
@@ -125,22 +125,28 @@ Torrent::DownloadState Torrent::download(uint16_t port)
 		return DownloadState::TrackerQueryFailure;
 
 	m_startTime = clock();
-	while (!isFinished()) {
-		for (Tracker *tracker : m_activeTrackers)
-			if (tracker->timeUp())
-				tracker->query(makeTrackerQuery(TrackerEvent::None));
-		std::this_thread::sleep_for(std::chrono::milliseconds(10));
-	}
+	return DownloadState::None;
+}
 
+bool Torrent::finish()
+{
 	TrackerEvent event = isFinished() ? TrackerEvent::Completed : TrackerEvent::Stopped;
 	TrackerQuery q = makeTrackerQuery(event);
-	for (Tracker *tracker : m_activeTrackers) {
+	for (auto it = m_activeTrackers.begin(); it != m_activeTrackers.end();) {
+		Tracker *tracker = *it;
 		tracker->query(q);
+		it = m_activeTrackers.erase(it);
 		delete tracker;
 	}
 
-	m_activeTrackers.clear();
-	return event == TrackerEvent::Completed ? DownloadState::Completed : DownloadState::NetworkError;
+	return !!(event == TrackerEvent::Completed);
+}
+
+void Torrent::checkTrackers()
+{
+	for (Tracker *tracker : m_activeTrackers)
+		if (tracker->timeUp())
+			tracker->query(makeTrackerQuery(TrackerEvent::None));
 }
 
 bool Torrent::seed(uint16_t port)
