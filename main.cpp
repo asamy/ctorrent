@@ -232,7 +232,10 @@ int main(int argc, char *argv[])
 				++eseed;
 		}
 
-		while (eseed != total) {	
+		while (eseed != total) {
+			for (int i = 0; i < total; ++i)
+				torrents[i].checkTrackers();
+
 			Connection::poll();
 			print_all_stats(torrents, total);
 			std::this_thread::sleep_for(std::chrono::milliseconds(5));
