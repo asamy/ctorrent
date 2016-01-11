@@ -116,12 +116,15 @@ TrackerQuery Torrent::makeTrackerQuery(TrackerEvent event)
 	return q;
 }
 
-Torrent::DownloadState Torrent::prepare(uint16_t port)
+Torrent::DownloadState Torrent::prepare(uint16_t port, bool seeder)
 {
-	if (isFinished())
+	if (seeder) {
+		if (!m_listener && !(m_listener = new(std::nothrow) Server(port)))
+			return DownloadState::NetworkError;
+	} else if (isFinished())
 		return DownloadState::AlreadyDownloaded;
 
-	if (!queryTrackers(makeTrackerQuery(TrackerEvent::Started), port))
+	if (!queryTrackers(makeTrackerQuery(TrackerEvent::Started), seeder ? port : 0))
 		return DownloadState::TrackerQueryFailure;
 
 	m_startTime = clock();
@@ -142,42 +145,29 @@ bool Torrent::finish()
 	return !!(event == TrackerEvent::Completed);
 }
 
-void Torrent::checkTrackers()
+bool Torrent::checkTrackers()
 {
+	uint32_t failed = 0;
 	for (Tracker *tracker : m_activeTrackers)
 		if (tracker->timeUp())
-			tracker->query(makeTrackerQuery(TrackerEvent::None));
+			failed |= !tracker->query(makeTrackerQuery(TrackerEvent::None));
+	return !!failed;
 }
 
-bool Torrent::seed(uint16_t port)
+bool Torrent::nextConnection()
 {
-	if (!m_listener) {
-		m_listener = new(std::nothrow) Server(port);
-		if (!m_listener)
-			return false;
-	}
-
-	if (!queryTrackers(makeTrackerQuery(TrackerEvent::Started), port))
-		return false;
-
-	// Just loop and wait for new connections
-	while (!m_listener->stopped()) {
+	if (m_listener) {
 		m_listener->accept(
 			[this] (const ConnectionPtr &c) {
 				auto peer = std::make_shared<Peer>(c, this);
 				peer->verify();
 			}
 		);
+
+		return true;
 	}
 
-	TrackerQuery q = makeTrackerQuery(TrackerEvent::Stopped);
-	for (Tracker *tracker : m_activeTrackers) {
-		tracker->query(q);
-		delete tracker;
-	}
-
-	m_activeTrackers.clear();
-	return true;
+	return false;
 }
 
 bool Torrent::queryTrackers(const TrackerQuery &query, uint16_t port)

@@ -55,10 +55,11 @@ public:
 	Torrent();
 	~Torrent();
 
-	DownloadState prepare(uint16_t port);
-	void checkTrackers();
+	DownloadState prepare(uint16_t port, bool seeder);
+	bool checkTrackers();
 	bool open(const std::string& fileName, const std::string &downloadDir);
-	bool seed(uint16_t port);
+	bool prepareforSeed(uint16_t port);
+	bool nextConnection();
 	bool finish();
 	bool isFinished() const { return m_fileManager.totalPieces() == m_fileManager.completedPieces(); }
 	bool hasTrackers() const { return !m_activeTrackers.empty(); }

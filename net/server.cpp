@@ -29,7 +29,8 @@ Server::Server(uint16_t port)
 
 Server::~Server()
 {
-	m_acceptor.cancel();
+	boost::system::error_code ec;
+	m_acceptor.cancel(ec);
 	m_acceptor.close();
 }
 

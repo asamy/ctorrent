@@ -167,7 +167,6 @@ int main(int argc, char *argv[])
 	attrset(A_BOLD);	// boldy
 	curs_set(0);		// don't show cursor
 #endif
-
 	size_t total = files.size();
 	size_t completed = 0;
 	size_t errors = 0;
@@ -175,7 +174,7 @@ int main(int argc, char *argv[])
 	size_t started = 0;
 
 	Torrent torrents[total];
-	for (size_t i = 0; i < files.size(); ++i) {
+	for (size_t i = 0; i < total; ++i) {
 		std::string file = files[i];
 		Torrent *t = &torrents[i];
 
@@ -194,7 +193,7 @@ int main(int argc, char *argv[])
 			continue;
 		}
 
-		Torrent::DownloadState state = t->prepare(startport++);
+		Torrent::DownloadState state = t->prepare(startport++, !noseed);
 		switch (state) {
 		case Torrent::DownloadState::None:
 			++started;
@@ -214,10 +213,14 @@ int main(int argc, char *argv[])
 				break;
 
 			Torrent *t = &torrents[completed];
-			if (t->hasTrackers() && t->isFinished())
+			if (t->hasTrackers() && t->isFinished()) {
 				t->finish();
-			else
+				++completed;
+			} else {
 				t->checkTrackers();
+				if (!noseed)
+					t->nextConnection();
+			}
 
 			Connection::poll();
 			print_all_stats(torrents, total);
@@ -228,13 +231,19 @@ int main(int argc, char *argv[])
 	if (!noseed && completed > 0) {
 		for (int i = 0; i < total; ++i) {
 			Torrent *t = &torrents[i];
-			if (!t->hasTrackers() && t->prepare(startport - i) > Torrent::DownloadState::Completed)
+			if (!t->hasTrackers())
 				++eseed;
 		}
 
 		while (eseed != total) {
-			for (int i = 0; i < total; ++i)
-				torrents[i].checkTrackers();
+			for (int i = 0; i < total; ++i) {
+				Torrent *t = &torrents[i];
+				if (!t->nextConnection() || !t->checkTrackers())
+					++eseed;
+			}
+
+			if (eseed == total)
+				break;
 
 			Connection::poll();
 			print_all_stats(torrents, total);
