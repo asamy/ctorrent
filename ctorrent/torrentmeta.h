@@ -26,6 +26,11 @@
 
 #include <bencode/bencode.h>
 
+struct sha1sum {
+	uint32_t i[5];
+	operator uint32_t *() { return &i[0]; }
+};
+
 class TorrentMeta {
 public:
 	TorrentMeta();
@@ -36,7 +41,7 @@ public:
 
 	inline TorrentFiles files() const { return m_files; }
 	inline std::string baseDir() const { return m_dirName; }
-	inline std::vector<std::string> sha1sums() const { return m_sha1sums; }
+	inline std::vector<sha1sum> sha1sums() const { return m_sha1sums; }
 
 	inline std::string name() const { return m_name; }
 	inline std::string comment() const { return m_comment; }
@@ -44,7 +49,7 @@ public:
 	inline std::string tracker() const { return m_mainTracker; }
 	inline VectorType trackers() const { return m_trackers; }
 
-	inline const uint8_t *checkSum() const { return m_checkSum; }
+	inline const uint32_t *checkSum() const { return &m_checkSum[0]; }
 	inline int64_t pieceLength() const { return m_pieceLength; }
 	inline size_t totalSize() const { return m_totalSize; }
 
@@ -59,13 +64,13 @@ private:
 	std::string m_createdBy;
 	std::string m_mainTracker;
 
-	uint8_t m_checkSum[20];
+	uint32_t m_checkSum[5];
 	int64_t m_pieceLength;
 	size_t m_totalSize;
 
 	TorrentFiles m_files;
 	VectorType m_trackers;
-	std::vector<std::string> m_sha1sums;
+	std::vector<sha1sum> m_sha1sums;
 };
 
 #endif

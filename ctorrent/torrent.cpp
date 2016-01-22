@@ -59,13 +59,16 @@ bool Torrent::open(const std::string &fileName, const std::string &downloadDir)
 	if (!m_meta.parse(fileName))
 		return false;
 
-	const uint8_t *checkSum = m_meta.checkSum();
 	m_handshake[0] = 0x13;					// 19 length of string "BitTorrent protocol"
 	memcpy(&m_handshake[1], "BitTorrent protocol", 19);
 	memset(&m_handshake[20], 0x00, 8);			// reserved bytes (last |= 0x01 for DHT or last |= 0x04 for FPE)
-	memcpy(&m_handshake[28], checkSum, 20);			// info hash
 	memcpy(&m_handshake[48], "-CT11000", 8);		// Azureus-style peer id (-CT0000-XXXXXXXXXXXX)
 	memcpy(&m_peerId[0], "-CT11000", 8);
+
+	// write info hash
+	const uint32_t *checkSum = m_meta.checkSum();
+	for (size_t i = 0; i < 5; ++i)
+		writeBE32(&m_handshake[28 + i * 4], checkSum[i]);
 
 	static std::random_device rd;
 	static std::knuth_b generator(rd());

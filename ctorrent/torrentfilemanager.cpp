@@ -60,13 +60,13 @@ struct WriteRequest {
 };
 
 struct Piece {
-	Piece(const uint8_t *h) {
-		memcpy(&hash[0], h, sizeof(hash));
+	Piece(uint32_t *sum) {
+		memcpy(&hash[0], &sum[0], sizeof(hash));
 		pri = 0;
 	}
 
 	int32_t pri;	// TODO Support more piece download strategies
-	uint8_t hash[20];
+	uint32_t hash[5];
 };
 
 class TorrentFileManagerImpl {
@@ -110,11 +110,7 @@ public:
 		uint32_t digest[5];
 		sha1.get_digest(digest);
 
-		uint8_t checkSum[20];
-		for (int i = 0; i < 5; ++i)
-			writeBE32(&checkSum[i * 4], digest[i]);	
-
-		return memcmp(checkSum, m_pieces[index].hash, 20) == 0;
+		return memcmp(digest, m_pieces[index].hash, 5) == 0;
 	}
 
 	int64_t piece_length(size_t index) const {
@@ -138,8 +134,8 @@ public:
 		m_pieces.reserve(sha1sums.size());
 		m_completedBits.construct(sha1sums.size());
 
-		for (size_t i = 0; i < sha1sums.size(); ++i)
-			m_pieces.push_back(Piece((const uint8_t *)sha1sums[i].c_str()));
+		for (sha1sum s : sha1sums)
+			m_pieces.push_back(Piece(s));
 	}
 
 protected:

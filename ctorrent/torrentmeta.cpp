@@ -83,11 +83,7 @@ bool TorrentMeta::internalParse(Dictionary &dict, Bencode &bencode)
 
 	boost::uuids::detail::sha1 sha1;
 	sha1.process_bytes(buffer, bufferSize);
-
-	uint32_t digest[5];
-	sha1.get_digest(digest);
-	for (int i = 0; i < 5; ++i)
-		writeBE32(&m_checkSum[i * 4], digest[i]);	
+	sha1.get_digest(m_checkSum);
 
 	m_name = Bencode::cast<std::string>(info["name"]);
 	m_pieceLength = Bencode::cast<int64_t>(info["piece length"]);
@@ -95,8 +91,21 @@ bool TorrentMeta::internalParse(Dictionary &dict, Bencode &bencode)
 	std::string pieces = Bencode::cast<std::string>(info["pieces"]);
 	m_sha1sums.reserve(pieces.size() / 20);
 
-	for (size_t i = 0; i < pieces.size(); i += 20)
-		m_sha1sums.push_back(std::string(pieces.c_str() + i, 20));
+	for (size_t i = 0; i < pieces.size(); i += 20) {
+		sha1sum s;
+		const uint8_t *sha1sum = (const uint8_t *)pieces.c_str() + i;
+		for (size_t k = 0; k < 5; ++k) {
+			const uint8_t *tmp = sha1sum + k * 4;
+			uint32_t *out = &s.i[k];
+
+			*out  = tmp[0] << 24;
+			*out |= tmp[1] << 16;
+			*out |= tmp[2] <<  8;
+			*out |= tmp[3] <<  0;
+		}
+
+		m_sha1sums.push_back(s);
+	}
 
 	if (info.count("files")) {
 		m_dirName = Bencode::cast<std::string>(info["name"]);
