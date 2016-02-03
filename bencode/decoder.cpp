@@ -61,7 +61,7 @@ bool Bencode::readIntUntil(const char byte, T &value)
 		return false;
 
 	size_t size = pos - m_pos;
-	if (size > m_buffer.cap())
+	if (size > m_buffer.rem())
 		return false;
 
 	std::istringstream is(std::string(&m_buffer[m_pos], size));
