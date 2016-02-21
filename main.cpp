@@ -167,6 +167,7 @@ int main(int argc, char *argv[])
 	attrset(A_BOLD);	// boldy
 	curs_set(0);		// don't show cursor
 #endif
+
 	size_t total = files.size();
 	size_t completed = 0;
 	size_t errors = 0;

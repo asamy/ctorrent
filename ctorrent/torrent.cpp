@@ -176,12 +176,8 @@ bool Torrent::nextConnection()
 bool Torrent::queryTrackers(const TrackerQuery &query, uint16_t port)
 {
 	bool success = queryTracker(m_meta.tracker(), query, port);
-	if (m_meta.trackers().empty()) {
-		if (!success)
-			std::cerr << m_meta.name() << ": queryTracker(): This torrent does not provide multiple trackers" << std::endl;
-
+	if (m_meta.trackers().empty())
 		return success;
-	}
 
 	bool alt = false;
 	for (const boost::any &s : m_meta.trackers()) {
@@ -189,10 +185,9 @@ bool Torrent::queryTrackers(const TrackerQuery &query, uint16_t port)
 			const VectorType &vType = Bencode::cast<VectorType>(&s);
 			for (const boost::any &announce : vType)
 				alt = queryTracker(Bencode::cast<std::string>(&announce), query, port);
-		} else if (s.type() == typeid(std::string))
+		}
+		else if (s.type() == typeid(std::string))
 			alt = queryTracker(Bencode::cast<std::string>(&s), query, port);
-		else
-			std::cerr << m_meta.name() << ": warning: unkown tracker type: " << s.type().name() << std::endl;
 	}
 
 	return success || alt;
@@ -202,10 +197,8 @@ bool Torrent::queryTracker(const std::string &furl, const TrackerQuery &q, uint1
 {
 	UrlData url = parseUrl(furl);
 	std::string host = URL_HOSTNAME(url);
-	if (host.empty()) {
-		std::cerr << m_meta.name() << ": queryTracker(): failed to parse announce url: " << furl << std::endl;
+	if (host.empty())
 		return false;
-	}
 
 	std::string port = URL_SERVNAME(url);
 	std::string protocol = URL_PROTOCOL(url);
@@ -280,8 +273,6 @@ void Torrent::connectToPeers(const boost::any &_peers)
 				rawConnectPeer(peerInfo);
 			}
 		} catch (const std::exception &e) {
-			// cast error
-			std::cerr << m_meta.name() << ": connectToPeers(dict): " << e.what() << std::endl;
 		}
 	} else if (_peers.type() == typeid(VectorType)) {
 		VectorType peers = *boost::unsafe_any_cast<VectorType>(&_peers);
@@ -293,12 +284,7 @@ void Torrent::connectToPeers(const boost::any &_peers)
 				rawConnectPeer(peerInfo);
 			}
 		} catch (const std::exception &e) {
-			// cast error
-			std::cerr << m_meta.name() << ": connectToPeers(vec): " << e.what() << std::endl;
 		}
-	} else {
-		std::cerr << m_meta.name() << ": peers type unhandled: " << _peers.type().name() << std::endl;
-		return;	// FIXME
 	}
 }
 

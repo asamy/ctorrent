@@ -172,14 +172,13 @@ void SchedulerImpl::thread()
 		}
 
 		// Ugly hack for newly added events
+fart:
 		bool cont = m_condition.wait_until(m, std::chrono::system_clock::now()
 				+ std::chrono::milliseconds(5), [this] () { return events.top().expired(); });
 		if (m_stopped)
 			break;
-		else if (!cont) {
-			m.unlock();
-			continue;
-		}
+		else if (!cont)
+			goto fart;
 
 		SchedulerEvent e = events.top();
 		events.pop();
