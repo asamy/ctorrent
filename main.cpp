@@ -79,7 +79,7 @@ static void print_stats(Torrent *t)
 	const TorrentFileManager *fm = t->fileManager();
 
 	printc(COL_GREEN, "%s: ", meta->name().c_str());
-	printc(COL_YELLOW, "%.2f Mbps (%zd / %zd downloaded %zd hash miss, %zd wasted - %.2f seconds left) ",
+	printc(COL_YELLOW, "%.2f Mbps (%zd / %zd downloaded %zd hash miss - %zd wasted - %.2f seconds left) ",
 				t->downloadSpeed(), t->downloadedBytes(), meta->totalSize(),
 				t->hashMisses(), t->wastedBytes(), t->eta());
 	printc(COL_YELLOW, "[ %d/%d pieces %d peers active ]\n",
@@ -169,6 +169,7 @@ int main(int argc, char *argv[])
 #endif
 
 	size_t total = files.size();
+	size_t total_bits = ~((1 << total) + 1);
 	size_t completed = 0;
 	size_t errors = 0;
 	size_t eseed = 0;
@@ -181,7 +182,7 @@ int main(int argc, char *argv[])
 
 		if (!t->open(file, dldir)) {
 			std::cerr << file << ": corrupted torrent file" << std::endl;
-			++errors;
+			errors |= 1 << i;
 			continue;
 		}
 
@@ -191,6 +192,7 @@ int main(int argc, char *argv[])
 
 			std::clog << meta->name() << ": Total size: " << bytesToHumanReadable(meta->totalSize(), true) << std::endl;
 			std::clog << meta->name() << ": Completed pieces: " << fm->completedPieces() << "/" << fm->totalPieces() << std::endl;
+			completed |= 1 << i;
 			continue;
 		}
 
@@ -200,21 +202,18 @@ int main(int argc, char *argv[])
 			++started;
 			break;
 		case Torrent::DownloadState::Completed:
-			++completed;
+			completed |= 1 << i;
 			break;
 		default:
-			++errors;
+			errors |= 1 << i;
 			break;
 		}
 	}
 
 	if (!nodownload && started > 0) {
-		while (completed != total - errors) {
-			if (errors == total)
-				break;
-
+		while (!(total_bits & (completed | errors))) {
 			Torrent *t = &torrents[completed];
-			if (t->hasTrackers() && t->isFinished()) {
+			if (t->isFinished()) {
 				t->finish();
 				++completed;
 			} else {
@@ -230,21 +229,18 @@ int main(int argc, char *argv[])
 	}
 
 	if (!noseed && completed > 0) {
-		for (int i = 0; i < total; ++i) {
+		for (size_t i = 0; i < total; ++i) {
 			Torrent *t = &torrents[i];
 			if (!t->hasTrackers())
-				++eseed;
+				eseed |= 1 << i;
 		}
 
-		while (eseed != total) {
-			for (int i = 0; i < total; ++i) {
+		while ((eseed ^ total_bits) != 0) {
+			for (size_t i = 0; i < total; ++i) {
 				Torrent *t = &torrents[i];
 				if (!t->nextConnection() || !t->checkTrackers())
-					++eseed;
+					eseed |= 1 << i;
 			}
-
-			if (eseed == total)
-				break;
 
 			Connection::poll();
 			print_all_stats(torrents, total);
@@ -252,10 +248,22 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	for (size_t i = 0; i < total; ++i) {
+		Torrent *t = &torrents[i];
+		const TorrentMeta *meta = t->meta();	
+		if (completed & (1 << i))
+			std::clog << "Completed: ";
+		else if (errors & (1 << i))
+			std::clog << "Something went wrong downloading: ";
+		else if (eseed & (1 << i))
+			std::clog << "Failed to seed: ";
+		std::clog << meta->name() << std::endl;
+	}
+
 #ifndef _WIN32
 	endwin();
 #endif
-	delete torrents;
+	delete []torrents;
 	return 0;
 }
 
