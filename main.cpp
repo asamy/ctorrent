@@ -159,15 +159,6 @@ int main(int argc, char *argv[])
 	else if (vm.count("piecesize"))
 		maxRequestSize = 1 << (32 - __builtin_clz(maxRequestSize - 1));
 
-#ifndef _WIN32
-	initscr();
-	assume_default_colors(COLOR_WHITE, COLOR_BLACK);
-	init_pair(1, COLOR_GREEN, COLOR_BLACK);
-	init_pair(2, COLOR_YELLOW, COLOR_BLACK);
-	attrset(A_BOLD);	// boldy
-	curs_set(0);		// don't show cursor
-#endif
-
 	size_t total = files.size();
 	size_t total_bits = ~((1 << total) + 1);
 	size_t completed = 0;
@@ -210,7 +201,16 @@ int main(int argc, char *argv[])
 		}
 	}
 
+#ifndef _WIN32
+	initscr();
+	assume_default_colors(COLOR_WHITE, COLOR_BLACK);
+	init_pair(1, COLOR_GREEN, COLOR_BLACK);
+	init_pair(2, COLOR_YELLOW, COLOR_BLACK);
+	attrset(A_BOLD);	// boldy
+	curs_set(0);		// don't show cursor
+#endif
 	if (!nodownload && started > 0) {
+		init_screen();
 		while (!(total_bits & (completed | errors))) {
 			Torrent *t = &torrents[completed];
 			if (t->isFinished()) {
@@ -248,6 +248,10 @@ int main(int argc, char *argv[])
 		}
 	}
 
+#ifndef _WIN32
+	endwin();
+#endif
+
 	for (size_t i = 0; i < total; ++i) {
 		Torrent *t = &torrents[i];
 		const TorrentMeta *meta = t->meta();	
@@ -260,9 +264,6 @@ int main(int argc, char *argv[])
 		std::clog << meta->name() << std::endl;
 	}
 
-#ifndef _WIN32
-	endwin();
-#endif
 	delete []torrents;
 	return 0;
 }
