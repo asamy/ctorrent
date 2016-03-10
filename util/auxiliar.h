@@ -53,7 +53,7 @@ union Mix {
 	char cdat[4];
 };
 static constexpr Mix mix { 0x1 };
-constexpr bool isLittleEndian()
+static bool isLittleEndian()
 {
 	return mix.cdat[0] == 1;
 }

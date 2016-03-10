@@ -260,10 +260,7 @@ void TorrentFileManagerImpl::thread()
 	while (!m_stopped) {
 		lock.lock();
 		if (m_writeRequests.empty() && m_readRequests.empty())
-			m_condition.wait(lock);
-
-		if (m_stopped)
-			break;
+			m_condition.wait(lock);	
 
 		// It doesn't really matter which one we process first
 		// as torrent should be aware of our write process and should not
