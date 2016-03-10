@@ -68,8 +68,8 @@ enum {
 };
 
 #define printc(c, fmt, args...)	do {	\
-	attron(COLOR_PAIR(c));	\
-	printw(fmt, ##args);	\
+	attron(COLOR_PAIR((c))); 	\
+	printw(fmt, ##args); 		\
 } while (0)
 #endif
 
@@ -161,7 +161,7 @@ int main(int argc, char *argv[])
 		maxRequestSize = 1 << (32 - __builtin_clz(maxRequestSize - 1));
 
 	size_t total = files.size();
-	size_t total_bits = ~((1 << total) + 1);
+	size_t total_bits = 0;
 	size_t completed = 0;
 	size_t errors = 0;
 	size_t eseed = 0;
@@ -172,6 +172,7 @@ int main(int argc, char *argv[])
 		std::string file = files[i];
 		Torrent *t = &torrents[i];
 
+		total_bits |= 1 << i;
 		if (!t->open(file, dldir)) {
 			std::cerr << file << ": corrupted torrent file" << std::endl;
 			errors |= 1 << i;
@@ -210,8 +211,9 @@ int main(int argc, char *argv[])
 	attrset(A_BOLD);	// boldy
 	curs_set(0);		// don't show cursor
 #endif
+
 	if (!nodownload && started > 0) {
-		while (!(total_bits & (completed | errors))) {
+		while (total_bits ^ (completed | errors)) {
 			for (size_t i = 0; i < total; ++i) {
 				Torrent *t = &torrents[i];
 				if (t->isFinished()) {
@@ -237,7 +239,7 @@ int main(int argc, char *argv[])
 				eseed |= 1 << i;
 		}
 
-		while ((eseed ^ total_bits) != 0) {
+		while (eseed ^ total_bits) {
 			for (size_t i = 0; i < total; ++i) {
 				Torrent *t = &torrents[i];
 				if (!t->nextConnection() || !t->checkTrackers())
