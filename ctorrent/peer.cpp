@@ -358,7 +358,7 @@ void Peer::sendUnchoke()
 void Peer::sendBitfield(const uint8_t *bits, size_t size)
 {
 	OutputMessage out(ByteOrder::BigEndian, 5 + size);
-	out << 1UL + size;
+	out << (uint32_t)(1UL + size);
 	out << (uint8_t)MT_Bitfield;
 	out.addBytes(bits, size);
 
@@ -371,7 +371,7 @@ void Peer::sendHave(uint32_t index)
 		return;
 
 	OutputMessage out(ByteOrder::BigEndian, 9);
-	out << 5UL;		// length
+	out << (uint32_t)5UL;		// length
 	out << (uint8_t)MT_Have;
 	out << index;
 
@@ -381,7 +381,7 @@ void Peer::sendHave(uint32_t index)
 void Peer::sendPieceBlock(uint32_t index, uint32_t begin, const uint8_t *block, size_t length)
 {
 	OutputMessage out(ByteOrder::BigEndian, 13 + length);
-	out << 9UL + length;	// length
+	out << (uint32_t)(9UL + length);	// length
 	out << (uint8_t)MT_PieceBlock;
 	out << index;
 	out << begin;
@@ -411,7 +411,7 @@ void Peer::sendPieceRequest(uint32_t index)
 void Peer::sendRequest(uint32_t index, uint32_t begin, uint32_t length)
 {
 	OutputMessage out(ByteOrder::BigEndian, 17);
-	out << 13UL;		// length
+	out << (uint32_t)13UL;		// length
 	out << (uint8_t)MT_Request;
 	out << index;
 	out << begin;
@@ -440,7 +440,7 @@ void Peer::cancelPiece(Piece *p)
 void Peer::sendCancel(uint32_t index, uint32_t begin, uint32_t length)
 {
 	OutputMessage out(ByteOrder::BigEndian, 17);
-	out << 13UL;	// length
+	out << (uint32_t)13UL;	// length
 	out << (uint8_t)MT_Cancel;
 	out << index;
 	out << begin;

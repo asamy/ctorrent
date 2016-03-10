@@ -39,7 +39,6 @@ struct TorrentFileInfo {
 typedef std::vector<TorrentFileInfo> TorrentFiles;
 
 class Torrent;
-class TorrentFile;
 class TorrentFileManagerImpl;
 class TorrentFileManager {
 public:

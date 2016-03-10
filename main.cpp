@@ -174,7 +174,7 @@ int main(int argc, char *argv[])
 	size_t eseed = 0;
 	size_t started = 0;
 
-	Torrent torrents[total];
+	Torrent *torrents = new Torrent[total]; 	// Workaround for CLang non-POD
 	for (size_t i = 0; i < total; ++i) {
 		std::string file = files[i];
 		Torrent *t = &torrents[i];
@@ -255,6 +255,7 @@ int main(int argc, char *argv[])
 #ifndef _WIN32
 	endwin();
 #endif
+	delete torrents;
 	return 0;
 }
 

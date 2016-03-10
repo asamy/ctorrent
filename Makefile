@@ -12,7 +12,7 @@ LIBS = -fopenmp -lboost_system -lboost_filesystem -lboost_program_options
 ifeq ($(OS),Windows_NT)
 LIBS += -lws2_32 -lshlwapi
 else
-LIBS += -pthread -lcurses
+LIBS += -lpthread -lcurses
 endif
 
 OBJ_DIR = obj

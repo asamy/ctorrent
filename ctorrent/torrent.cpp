@@ -29,7 +29,7 @@
 #include <algorithm>
 #include <iostream>
 #include <thread>
-
+#include <random>
 
 Torrent::Torrent()
 	: m_listener(nullptr),
