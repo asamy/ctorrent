@@ -210,7 +210,6 @@ int main(int argc, char *argv[])
 	curs_set(0);		// don't show cursor
 #endif
 	if (!nodownload && started > 0) {
-		init_screen();
 		while (!(total_bits & (completed | errors))) {
 			Torrent *t = &torrents[completed];
 			if (t->isFinished()) {
