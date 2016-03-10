@@ -102,6 +102,7 @@ static void print_all_stats(Torrent *torrents, size_t total)
 #ifdef _WIN32
 	SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
 #else
+	printw("\n");
 	refresh();
 #endif
 }
