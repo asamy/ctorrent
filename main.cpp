@@ -211,14 +211,16 @@ int main(int argc, char *argv[])
 #endif
 	if (!nodownload && started > 0) {
 		while (!(total_bits & (completed | errors))) {
-			Torrent *t = &torrents[completed];
-			if (t->isFinished()) {
-				t->finish();
-				++completed;
-			} else {
-				t->checkTrackers();
-				if (!noseed)
-					t->nextConnection();
+			for (size_t i = 0; i < total; ++i) {
+				Torrent *t = &torrents[i];
+				if (t->isFinished()) {
+					t->finish();
+					completed |= 1 << i;
+				} else {
+					t->checkTrackers();
+					if (!noseed)
+						t->nextConnection();
+				}
 			}
 
 			Connection::poll();
