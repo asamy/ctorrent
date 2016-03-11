@@ -99,7 +99,7 @@ public:
 		const uint8_t *dst = m_bits + m_size;
 		while (src + 7 <= dst) {
 			set += popcnt(*(uint64_t *)src);
-			src += 4;
+			src += 8;
 		}
 
 		if (src + 3 <= dst) {

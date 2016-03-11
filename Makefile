@@ -5,7 +5,7 @@ DEP_DIR = dep
 DEPFLAGS = -MT $@ -MMD -MP -MF $(DEP_DIR)/$*.d
 
 CXX = g++
-BTYPE = -g3 -ggdb3 -O0
+BTYPE = -O3
 CXXFLAGS = -std=c++11 $(DEPFLAGS) $(BTYPE) -fopenmp -Wall -Wextra -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter -I"."
 
 LIBS = -fopenmp -lboost_system -lboost_filesystem -lboost_program_options
