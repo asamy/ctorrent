@@ -80,7 +80,7 @@ static void print_stats(Torrent *t)
 
 	printc(COL_GREEN, "%s: ", meta->name().c_str());
 	printc(COL_YELLOW, "%.2f Mbps (%zd / %zd downloaded %zd hash miss - %zd wasted - %.2f seconds left) ",
-				t->downloadSpeed(), t->downloadedBytes(), meta->totalSize(),
+				t->downloadSpeed(), t->computeDownloaded(), meta->totalSize(),
 				t->hashMisses(), t->wastedBytes(), t->eta());
 	printc(COL_YELLOW, "[ %d/%d pieces %d peers active ]\n",
 				fm->completedPieces(), fm->totalPieces(), t->activePeers());
@@ -110,6 +110,7 @@ static void print_all_stats(Torrent *torrents, size_t total)
 int main(int argc, char *argv[])
 {
 	bool noseed = false;
+	bool nodownload = false;
 	int startport = 6881;
 	std::string dldir = "Torrents";
 	std::vector<std::string> files;
@@ -120,10 +121,10 @@ int main(int argc, char *argv[])
 		("version,v", "print version string")
 		("help,h", "print this help message")
 		("port,p", po::value(&startport), "specify start port for seeder torrents")
-		("nodownload,n", "do not download anything, just print info about torrents")
+		("nodownload,n", po::bool_switch(&nodownload), "do not download anything, just print info about torrents")
 		("piecesize,s", po::value(&maxRequestSize), "specify piece block size")
 		("dldir,d", po::value(&dldir), "specify downloads directory")
-		("noseed,e", po::value(&noseed), "do not seed after download has finished.")
+		("noseed,e", po::bool_switch(&noseed), "do not seed after download has finished.")
 		("torrents,t", po::value<std::vector<std::string>>(&files)->required()->multitoken(), "specify torrent file(s)");
 
 	if (argc == 1) {
@@ -154,10 +155,7 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 
-	bool nodownload = false;
-	if (vm.count("nodownload"))
-		nodownload = true;
-	else if (vm.count("piecesize"))
+	if (vm.count("piecesize"))
 		maxRequestSize = 1 << (32 - __builtin_clz(maxRequestSize - 1));
 
 	size_t total = files.size();
@@ -171,13 +169,15 @@ int main(int argc, char *argv[])
 	for (size_t i = 0; i < total; ++i) {
 		std::string file = files[i];
 		Torrent *t = &torrents[i];
-
 		total_bits |= 1 << i;
+
+		std::clog << "Scanning: " << file << "... ";
 		if (!t->open(file, dldir)) {
-			std::cerr << file << ": corrupted torrent file" << std::endl;
+			std::cerr << "corrupted torrent file" << std::endl;
 			errors |= 1 << i;
 			continue;
 		}
+		std::clog << "Done" << std::endl;
 
 		const TorrentMeta *meta = t->meta();
 		if (nodownload) {
@@ -189,21 +189,26 @@ int main(int argc, char *argv[])
 			continue;
 		}
 
+		std::clog << "Preparing " << file << "... ";
 		Torrent::DownloadState state = t->prepare(startport++, !noseed);
 		switch (state) {
 		case Torrent::DownloadState::None:
 			++started;
+			std::clog << "Done" << std::endl;
 			break;
 		case Torrent::DownloadState::Completed:
 			completed |= 1 << i;
+			std::clog << "Done (already downloaded)" << std::endl;
 			break;
 		default:
 			errors |= 1 << i;
+			std::cerr << "Failed" << std::endl;
 			break;
 		}
 	}
 
 #ifndef _WIN32
+	usleep(10000);
 	initscr();
 	assume_default_colors(COLOR_WHITE, COLOR_BLACK);
 	init_pair(1, COLOR_GREEN, COLOR_BLACK);
@@ -213,6 +218,7 @@ int main(int argc, char *argv[])
 #endif
 
 	if (!nodownload && started > 0) {
+		std::clog << "Downloading torrents..." << std::endl;
 		while (total_bits ^ (completed | errors)) {
 			for (size_t i = 0; i < total; ++i) {
 				Torrent *t = &torrents[i];
@@ -233,6 +239,7 @@ int main(int argc, char *argv[])
 	}
 
 	if (!noseed && completed > 0) {
+		std::clog << "Now seeding" << std::endl;
 		for (size_t i = 0; i < total; ++i) {
 			Torrent *t = &torrents[i];
 			if (!t->hasTrackers())

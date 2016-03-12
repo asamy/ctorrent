@@ -69,6 +69,7 @@ public:
 	size_t uploadedBytes() const { return m_uploadedBytes; }
 	size_t wastedBytes() const { return m_wastedBytes; }
 	size_t hashMisses() const { return m_hashMisses; }
+	size_t computeDownloaded() { return m_fileManager.computeDownloaded(); }
 
 	double eta();
 	double downloadSpeed();
@@ -90,8 +91,6 @@ protected:
 	void requestPiece(const PeerPtr &peer);
 
 	TrackerQuery makeTrackerQuery(TrackerEvent event);
-	size_t computeDownloaded() { return m_fileManager.computeDownloaded(); }
-
 	void addBlacklist(uint32_t ip);
 	void addPeer(const PeerPtr &peer);
 	void removePeer(const PeerPtr &peer, const std::string &errmsg);
