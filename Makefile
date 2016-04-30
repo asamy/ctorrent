@@ -1,14 +1,23 @@
+ifeq ("$(origin C)", "command line")
+	CROSS_BUILD = x86_64-w64-mingw32-
+	LIBS = -static-libgcc -static-libstdc++
+else
+	CROSS_BUILD = 
+	LIBS = 
+endif
+
 BIN_DIR = bin
 BIN = $(BIN_DIR)/ctorrent
 
 DEP_DIR = dep
 DEPFLAGS = -MT $@ -MMD -MP -MF $(DEP_DIR)/$*.d
 
-CXX = g++
+CXX = $(CROSS_BUILD)g++
 BTYPE = -O3
-CXXFLAGS = -std=c++11 $(DEPFLAGS) $(BTYPE) -fopenmp -Wall -Wextra -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter -I"."
+CXXFLAGS = -std=c++0x $(DEPFLAGS) $(BTYPE) -fopenmp \
+	   -Wall -Wextra -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter -I"."
 
-LIBS = -fopenmp -lboost_system -lboost_filesystem -lboost_program_options
+LIBS += -fopenmp -lboost_system -lboost_filesystem -lboost_program_options
 ifeq ($(OS),Windows_NT)
 LIBS += -lws2_32 -lshlwapi
 else
@@ -17,10 +26,10 @@ endif
 
 OBJ_DIR = obj
 SRC = bencode/decoder.cpp bencode/encoder.cpp \
-	ctorrent/tracker.cpp ctorrent/peer.cpp ctorrent/torrentmeta.cpp ctorrent/torrentfilemanager.cpp ctorrent/torrent.cpp \
-	net/server.cpp net/connection.cpp net/inputmessage.cpp net/outputmessage.cpp \
-	util/auxiliar.cpp util/scheduler.cpp \
-	main.cpp
+      ctorrent/tracker.cpp ctorrent/peer.cpp ctorrent/torrentmeta.cpp ctorrent/torrentfilemanager.cpp ctorrent/torrent.cpp \
+      net/server.cpp net/connection.cpp net/inputmessage.cpp net/outputmessage.cpp \
+      util/auxiliar.cpp util/scheduler.cpp \
+      main.cpp
 OBJ = $(SRC:%.cpp=$(OBJ_DIR)/%.o)
 DEP = $(SRC:%.cpp=$(DEP_DIR)/%.d)
 
