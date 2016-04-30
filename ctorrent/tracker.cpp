@@ -23,6 +23,7 @@
 #include "torrent.h"
 
 #include <boost/array.hpp>
+#include <thread>
 
 bool Tracker::query(const TrackerQuery &req)
 {
@@ -178,11 +179,13 @@ bool Tracker::udpRequest(const TrackerQuery &r)
 		return false;
 	}
 
-	size_t len = socket.receive_from(asio::buffer(buf, 16), r_endpoint);
-	if (len != 16) {
-		m_torrent->handleTrackerError(this, "failed to receive data");
-		socket.close();
-		return false;
+	boost::asio::socket_base::non_blocking_io command(true);
+	socket.io_control(command);
+
+	int len;
+	for (int tries = 0; tries < 10 && len != 16; ++tries) {
+		len = socket.receive_from(asio::buffer(buf, 16), r_endpoint, 0, error);
+		std::this_thread::sleep_for(std::chrono::milliseconds(tries * 30));
 	}
 
 	if (readBE32(&buf[0]) != 0) {
@@ -223,7 +226,15 @@ bool Tracker::udpRequest(const TrackerQuery &r)
 	}
 
 	uint8_t response[1500];
-	len = socket.receive_from(asio::buffer(response, sizeof(response)), r_endpoint);
+	len = 0;
+	for (int tries = 0; tries < 15; ++tries) {
+		int read = socket.receive_from(asio::buffer(response + len, sizeof(response) - len), r_endpoint, 0, error);
+		if (read > 0)
+			len += read;
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(tries * 30));
+	}
+
 	socket.close();
 	if (len < 20) {
 		m_torrent->handleTrackerError(this, "expected at least 20 bytes response");

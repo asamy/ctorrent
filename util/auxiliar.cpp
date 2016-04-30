@@ -34,13 +34,6 @@
 
 #include <boost/filesystem.hpp>
 
-#ifdef _WIN32
-#include <ws2tcpip.h>
-#else
-#include <arpa/inet.h>
-#endif
-
-
 UrlData parseUrl(const std::string &str)
 {
 	/// TODO: Regex could be quicker?
@@ -111,9 +104,9 @@ std::string ip2str(uint32_t ip)
 
 uint32_t str2ip(const std::string &ip)
 {
-	uint32_t i;
-	inet_pton(AF_INET, ip.c_str(), &i);
-	return i;
+	const uint8_t *c = (const uint8_t *)ip.c_str();
+//	return c[0] | c[1] << 8 | c[2] << 16 | c[3] << 24;
+	return c[0] << 24 | c[1] << 16 | c[2] << 8 | c[3];
 }
 
 std::string getcwd()

@@ -100,7 +100,7 @@ VectorType Bencode::readVector()
 
 		switch (byte) {
 		case 'i':		ret.push_back(readInt());	 break;
-		case 'l':		ret.push_back(readVector());	 break;
+		case 'l':		ret.push_back(readVector()); break;
 		case 'd':		ret.push_back(readDictionary()); break;
 		case 'e':		return ret;
 		default:
@@ -147,11 +147,9 @@ Dictionary Bencode::readDictionary()
 		case 'l':		ret[key] = readVector();	break;
 		case 'd':		ret[key] = readDictionary();	break;
 		default:
-			{
-				--m_pos;
-				ret[key] = readString();
-				break;
-			}
+			--m_pos;
+			ret[key] = readString();
+			break;
 		}
 
 		if (!unpackByte(byte))

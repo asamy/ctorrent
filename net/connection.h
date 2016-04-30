@@ -22,12 +22,14 @@
 #ifndef __CONNECTION_H
 #define __CONNECTION_H
 
+#if 0
 #ifdef _WIN32
 #ifdef __STRICT_ANSI__
 #undef __STRICT_ANSI__
 #endif
 #define _WIN32_WINNT 0x0501
 #define WINVER 0x0501
+#endif
 #endif
 #include <boost/asio.hpp>
 #include <boost/system/error_code.hpp>

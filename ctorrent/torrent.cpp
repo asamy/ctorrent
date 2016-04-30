@@ -150,11 +150,10 @@ bool Torrent::finish()
 
 bool Torrent::checkTrackers()
 {
-	uint32_t failed = 0;
 	for (Tracker *tracker : m_activeTrackers)
-		if (tracker->timeUp())
-			failed |= !tracker->query(makeTrackerQuery(TrackerEvent::None));
-	return !!failed;
+		if (tracker->timeUp() && tracker->query(makeTrackerQuery(TrackerEvent::None)))
+			return true;
+	return false;
 }
 
 bool Torrent::nextConnection()
@@ -179,18 +178,18 @@ bool Torrent::queryTrackers(const TrackerQuery &query, uint16_t port)
 	if (m_meta.trackers().empty())
 		return success;
 
-	bool alt = false;
 	for (const boost::any &s : m_meta.trackers()) {
 		if (s.type() == typeid(VectorType)) {
-			const VectorType &vType = Bencode::cast<VectorType>(&s);
+			const VectorType &vType = Bencode::cast<VectorType>(s);
 			for (const boost::any &announce : vType)
-				alt = queryTracker(Bencode::cast<std::string>(&announce), query, port);
-		}
-		else if (s.type() == typeid(std::string))
-			alt = queryTracker(Bencode::cast<std::string>(&s), query, port);
+				if (queryTracker(Bencode::cast<std::string>(announce), query, port))
+					return true;
+		} else if (s.type() == typeid(std::string) &&
+				   queryTracker(Bencode::cast<std::string>(&s), query, port))
+		   return true;
 	}
 
-	return success || alt;
+	return success;
 }
 
 bool Torrent::queryTracker(const std::string &furl, const TrackerQuery &q, uint16_t tport)
@@ -314,9 +313,6 @@ void Torrent::disconnectPeers()
 void Torrent::sendBitfield(const PeerPtr &peer)
 {
 	const bitset *b = m_fileManager.completedBits();
-	if (b->count() == 0)
-		return;
-
 	uint8_t bits[b->size()];
 	for (size_t i = 0; i < b->size(); ++i)
 		if (b->test(i))
@@ -352,7 +348,8 @@ bool Torrent::handleRequestBlock(const PeerPtr &peer, uint32_t index, uint32_t b
 void Torrent::onPieceWriteComplete(uint32_t from, uint32_t index)
 {
 	for (const auto &it : m_peers)
-		it.second->sendHave(index);
+		if (!it.second->hasPiece(index))
+			it.second->sendHave(index);
 }
 
 void Torrent::onPieceReadComplete(uint32_t from, uint32_t index, uint32_t begin, uint8_t *block, size_t size)
@@ -377,4 +374,3 @@ void Torrent::handleNewPeer(const PeerPtr &peer)
 	m_peers.insert(std::make_pair(peer->ip(), peer));
 	sendBitfield(peer);
 }
-

@@ -32,7 +32,13 @@
 #ifdef _WIN32
 #define PATH_SEP "\\"
 #define MKDIR(name)		mkdir((name).c_str())
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include <io.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <iphlpapi.h>
 #include <windows.h>
 #include <Shlwapi.h>
 #else
@@ -41,6 +47,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <arpa/inet.h>
 #endif
 #define CHDIR(name)		chdir((name).c_str())
 
