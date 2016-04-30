@@ -185,7 +185,7 @@ bool Torrent::queryTrackers(const TrackerQuery &query, uint16_t port)
 				if (queryTracker(Bencode::cast<std::string>(announce), query, port))
 					return true;
 		} else if (s.type() == typeid(std::string) &&
-				   queryTracker(Bencode::cast<std::string>(&s), query, port))
+			   queryTracker(Bencode::cast<std::string>(&s), query, port))
 		   return true;
 	}
 
