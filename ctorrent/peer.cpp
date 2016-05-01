@@ -65,20 +65,17 @@ void Peer::connect(const std::string &ip, const std::string &port)
 		m_conn->read(68, [this, m_handshake] (const uint8_t *handshake, size_t size) {
 			if (size != 68 ||
 			    (handshake[0] != 0x13 && memcmp(&handshake[1], "BitTorrent protocol", 19) != 0) ||
-			    memcmp(&handshake[28], &m_handshake[28], 20) != 0) {
-			std::clog <<"info"<<std::endl;
+			    memcmp(&handshake[28], &m_handshake[28], 20) != 0)
 				return handleError("info hash/protocol type mismatch");
-				}
 
 			std::string peerId((const char *)&handshake[48], 20);
-			if (!m_peerId.empty() && peerId != m_peerId) {
-			std::clog << "id"<<std::endl;
+			if (!m_peerId.empty() && peerId != m_peerId)
 				return handleError("peer id mismatch: unverified");
-				}
-				m_peerId = peerId;
-				m_torrent->addPeer(shared_from_this());
-				m_torrent->sendBitfield(shared_from_this());
-				m_conn->read(4, std::bind(&Peer::handle, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
+
+			m_peerId = peerId;
+			m_torrent->addPeer(shared_from_this());
+			m_torrent->sendBitfield(shared_from_this());
+			m_conn->read(4, std::bind(&Peer::handle, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 		});
 	});
 }
