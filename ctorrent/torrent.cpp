@@ -217,7 +217,7 @@ void Torrent::rawConnectPeers(const uint8_t *peers, size_t size)
 	// 6 bytes each (first 4 is ip address, last 2 port) all in big endian notation
 	for (size_t i = 0; i < size; i += 6) {
 		const uint8_t *iport = peers + i;
-		uint32_t ip = isLittleEndian() ? readLE32(iport) : readBE32(iport);
+		uint32_t ip = readLE32(iport);
 		if (ip == 0 || m_blacklisted.find(ip) != m_blacklisted.end())
 			continue;
 

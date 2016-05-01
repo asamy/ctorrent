@@ -55,16 +55,6 @@
 #include <fstream>
 #include <tuple>
 
-union Mix {
-	int sdat;
-	char cdat[4];
-};
-static constexpr Mix mix { 0x1 };
-static bool isLittleEndian()
-{
-	return mix.cdat[0] == 1;
-}
-
 typedef std::tuple<std::string, std::string, std::string> UrlData;
 #define URL_PROTOCOL(u)		std::get<0>((u))
 #define URL_HOSTNAME(u)		std::get<1>((u))
