@@ -82,7 +82,7 @@ static void print_stats(Torrent *t)
 	printc(COL_YELLOW, "%.2f Mbps (%zd / %zd downloaded %zd hash miss - %zd wasted - %.2f seconds left) ",
 				t->downloadSpeed(), t->computeDownloaded(), meta->totalSize(),
 				t->hashMisses(), t->wastedBytes(), t->eta());
-	printc(COL_YELLOW, "[ %d/%d pieces %d peers active ]\n",
+	printc(COL_YELLOW, "[ %zd/%zd pieces %zd peers active ]\n",
 				fm->completedPieces(), fm->totalPieces(), t->activePeers());
 }
 
