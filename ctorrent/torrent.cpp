@@ -73,8 +73,8 @@ bool Torrent::open(const std::string &fileName, const std::string &downloadDir)
 	static std::random_device rd;
 	static std::knuth_b generator(rd());
 	static std::uniform_int_distribution<uint8_t> random(0x00, 0xFF);
-	for (size_t i = 8; i < 20; ++i)
-		m_handshake[56 + i] = m_peerId[i] = random(generator);
+	for (size_t i = 0; i < 12; ++i)
+		m_handshake[56 + i] = m_peerId[8 + i] = random(generator);
 
 	std::string dir = downloadDir;
 	if (!ends_with(dir, PATH_SEP))

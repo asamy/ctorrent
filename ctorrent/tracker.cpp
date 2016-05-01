@@ -27,12 +27,7 @@
 
 bool Tracker::query(const TrackerQuery &req)
 {
-	bool ret = false;
-	if (m_type == TrackerHTTP)
-		ret = httpRequest(req);
-	else
-		ret = udpRequest(req);
-
+	bool ret = m_type == TrackerHTTP ? httpRequest(req) : udpRequest(req);
 	if (!ret)
 		m_timeToNextRequest = std::chrono::system_clock::now() + std::chrono::milliseconds(100);
 	return ret;
@@ -141,7 +136,7 @@ bool Tracker::httpRequest(const TrackerQuery &r)
 	}
 
 	m_timeToNextRequest = std::chrono::system_clock::now()
-				+ std::chrono::milliseconds(Bencode::cast<int64_t>(dict["interval"]));
+		+ std::chrono::milliseconds(Bencode::cast<int64_t>(dict["interval"]));
 	m_torrent->connectToPeers(dict["peers"]);
 	return true;
 }
