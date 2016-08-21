@@ -44,8 +44,8 @@ struct ReadRequest {
 	size_t index;
 	uint32_t id;
 	uint32_t from;
-	int64_t begin;
-	int64_t size;
+	size_t begin;
+	size_t size;
 };
 struct LeastReadRequest {
 	bool operator() (const ReadRequest &lhs, const ReadRequest &rhs) const {
@@ -89,21 +89,26 @@ public:
 	void unlock_and_notify() { m_mutex.unlock(); m_condition.notify_all(); }
 
 	void push_read(const ReadRequest &r) { m_readRequests.push(r); }
-	void push_write(WriteRequest &&w) { m_writeRequests.push(std::move(w)); }
+	void push_write(WriteRequest &&w) { m_writeRequests.push(std::move(w)); m_pendingBits.set(w.index); }
 	void push_file(const TorrentFile &f) { m_files.push_back(f); }
 	void scan_file(const TorrentFile &f);
 	void scan_pieces();
 
 	const bitset *completed_bits() const { return &m_completedBits; }
+	size_t pending() const { return m_pendingBits.count(); }
 	size_t completed_pieces() const { return m_completedBits.count(); }
 	size_t total_pieces() const { return m_pieces.size(); }
 	size_t get_next_piece(const std::function<bool (size_t)> &fun);
 	size_t compute_downloaded();
 
 	bool piece_done(size_t index) const { return index < m_pieces.size() && m_completedBits.test(index); }
+	bool piece_pending(size_t index) const { return index < m_pieces.size() && m_pendingBits.test(index); }
 	bool intact(size_t index) const { return index < m_pieces.size(); }
 	bool is_read_eligible(size_t index, int64_t end) const { return m_completedBits.test(index) && end < piece_length(index); }
 	bool is_write_eligible(size_t index, const uint8_t *data, size_t size) const {
+		if (m_pendingBits.test(index))
+			return false;
+
 		boost::uuids::detail::sha1 sha1;
 		sha1.process_bytes(data, size);
 
@@ -133,6 +138,7 @@ public:
 		auto sha1sums = m_torrent->meta()->sha1sums();
 		m_pieces.reserve(sha1sums.size());
 		m_completedBits.construct(sha1sums.size());
+		m_pendingBits.construct(sha1sums.size());
 
 		for (sha1sum s : sha1sums)
 			m_pieces.push_back(Piece(s));
@@ -149,6 +155,8 @@ private:
 	std::queue<WriteRequest> m_writeRequests;
 
 	bitset m_completedBits;
+	bitset m_pendingBits;
+
 	std::vector<TorrentFile> m_files;
 	std::vector<Piece> m_pieces;
 
@@ -165,11 +173,11 @@ void TorrentFileManagerImpl::scan_file(const TorrentFile &f)
 {
 	FILE *fp = f.fp;
 	fseek(fp, 0L, SEEK_END);
-	off64_t fileLength = ftello64(fp);
+	size_t fileLength = ftello64(fp);
 	fseek(fp, 0L, SEEK_SET);
 
 	if (f.info.length > fileLength) {
-//		truncate(f.info.path.c_str(), f.info.length);
+		truncate(f.info.path.c_str(), f.info.length);
 		return;
 	}
 
@@ -267,14 +275,18 @@ void TorrentFileManagerImpl::thread()
 		// mark the piece as fully have before we fully wrote it to disk.
 		while (!m_writeRequests.empty() && !m_stopped) {
 			const WriteRequest &w = m_writeRequests.front();
-			if (process_write(w))
-				m_writeRequests.pop();
+			if (!process_write(w))
+				break;
+
+			m_writeRequests.pop();
 		}
 
 		while (!m_readRequests.empty() && !m_stopped) {
 			ReadRequest r = m_readRequests.top();
-			if (process_read(r))
-				m_readRequests.pop();	
+			if (!process_read(r))
+				break;
+
+			m_readRequests.pop();	
 		}
 
 		lock.unlock();
@@ -286,16 +298,16 @@ bool TorrentFileManagerImpl::process_read(const ReadRequest &r)
 	const TorrentMeta *meta = m_torrent->meta();
 	int64_t blockBegin = r.begin + r.index * meta->pieceLength();
 	int64_t blockEnd = r.begin + r.size;
-	uint8_t block[r.size];
+	uint8_t *block = new uint8_t[r.size];
 
-	int64_t writePos = 0;
+	size_t writePos = 0;
 	for (const TorrentFile &f : m_files) {
-		int64_t filePos = blockBegin + writePos;
 		const TorrentFileInfo &i = f.info;
+		size_t filePos = blockBegin + writePos;
 		if (filePos < i.begin)
 			return false;
 
-		int64_t fileEnd = i.begin + i.length;
+		size_t fileEnd = i.begin + i.length;
 		if (filePos > fileEnd)
 			continue;
 		fseek(f.fp, filePos - i.begin, SEEK_SET);
@@ -311,15 +323,14 @@ bool TorrentFileManagerImpl::process_read(const ReadRequest &r)
 		}
 	}
 
-	// TODO: schedule this as well, make sure "block" will live for the period
-	m_torrent->onPieceReadComplete(r.from, r.index, r.begin, block, r.size);
+	g_sched.addEvent(std::bind(&Torrent::onPieceReadComplete, m_torrent, r.from, r.index, r.begin, block, r.size), 0);
 	return true;
 }
 
 bool TorrentFileManagerImpl::process_write(const WriteRequest &w)
 {
 	const TorrentMeta *meta = m_torrent->meta();
-	int64_t beginPos = w.index * meta->pieceLength();
+	size_t beginPos = w.index * meta->pieceLength();
 
 	const uint8_t *buf = &w.data[0];
 	size_t length = w.data.size();
@@ -330,11 +341,11 @@ bool TorrentFileManagerImpl::process_write(const WriteRequest &w)
 		if (beginPos < i.begin)
 			return false;
 
-		int64_t fileEnd = i.begin + i.length;
+		size_t fileEnd = i.begin + i.length;
 		if (beginPos >= fileEnd)
 			continue;
 
-		int64_t amount = fileEnd - beginPos;
+		size_t amount = fileEnd - beginPos;
 		if (amount > length)
 			amount = length;
 
@@ -345,6 +356,7 @@ bool TorrentFileManagerImpl::process_write(const WriteRequest &w)
 		length -= wrote;
 	}
 
+	m_pendingBits.clear(w.index);
 	m_completedBits.set(w.index);
 	g_sched.addEvent(std::bind(&Torrent::onPieceWriteComplete, m_torrent, w.from, w.index), 0);
 	return true;
@@ -358,7 +370,7 @@ size_t TorrentFileManagerImpl::get_next_piece(const std::function<bool (size_t)>
 	std::lock_guard<std::mutex> guard(m_mutex);
 	for (size_t i = 0; i < m_pieces.size(); ++i) {
 		Piece *p = &m_pieces[i];
-		if (m_completedBits.test(i) || !fun(i))
+		if (m_completedBits.test(i) || m_pendingBits.test(i) || !fun(i))
 			continue;
 
 		if (!p->pri) {
@@ -437,9 +449,19 @@ size_t TorrentFileManager::computeDownloaded()
 	return i->compute_downloaded();
 }
 
+size_t TorrentFileManager::pending() const
+{
+	return i->pending();
+}
+
 bool TorrentFileManager::pieceDone(size_t index) const
 {
 	return i->piece_done(index);
+}
+
+bool TorrentFileManager::piecePending(size_t index) const
+{
+	return i->piece_pending(index);
 }
 
 bool TorrentFileManager::registerFiles(const std::string &baseDir, const TorrentFiles &files)
@@ -488,7 +510,7 @@ bool TorrentFileManager::registerFiles(const std::string &baseDir, const Torrent
 	return true;
 }
 
-bool TorrentFileManager::requestPieceBlock(size_t index, uint32_t from, int64_t begin, int64_t size)
+bool TorrentFileManager::requestPieceBlock(size_t index, uint32_t from, size_t begin, size_t size)
 {
 	static uint32_t rid = 0;
 	if (!i->intact(index) || !i->is_read_eligible(index, begin + size))

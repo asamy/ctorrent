@@ -30,6 +30,9 @@
 #include <iostream>
 #include <thread>
 #include <random>
+#include <fstream>
+
+extern std::ofstream logfile;
 
 Torrent::Torrent()
 	: m_listener(nullptr),
@@ -159,12 +162,10 @@ bool Torrent::checkTrackers()
 bool Torrent::nextConnection()
 {
 	if (m_listener) {
-		m_listener->accept(
-			[this] (const ConnectionPtr &c) {
-				auto peer = std::make_shared<Peer>(c, this);
-				peer->verify();
-			}
-		);
+		m_listener->accept([this] (const ConnectionPtr &c) {
+			auto peer = std::make_shared<Peer>(c, this);
+			peer->verify();
+		});
 
 		return true;
 	}
@@ -175,7 +176,7 @@ bool Torrent::nextConnection()
 bool Torrent::queryTrackers(const TrackerQuery &query, uint16_t port)
 {
 	bool success = queryTracker(m_meta.tracker(), query, port);
-	if (m_meta.trackers().empty())
+	if (success)
 		return success;
 
 	for (const boost::any &s : m_meta.trackers()) {
@@ -186,10 +187,10 @@ bool Torrent::queryTrackers(const TrackerQuery &query, uint16_t port)
 					return true;
 		} else if (s.type() == typeid(std::string) &&
 			   queryTracker(Bencode::cast<std::string>(&s), query, port))
-		   return true;
+			return true;
 	}
 
-	return success;
+	return false;
 }
 
 bool Torrent::queryTracker(const std::string &furl, const TrackerQuery &q, uint16_t tport)
@@ -293,6 +294,7 @@ void Torrent::addPeer(const PeerPtr &peer)
 	if (it != m_blacklisted.end())
 		m_blacklisted.erase(it);
 
+	logfile << peer->getIP() << ": now connected" << std::endl;
 	m_peers.insert(std::make_pair(peer->ip(), peer));
 }
 
@@ -301,6 +303,8 @@ void Torrent::removePeer(const PeerPtr &peer, const std::string &errmsg)
 	auto it = m_peers.find(peer->ip());
 	if (it != m_peers.end())
 		m_peers.erase(it);
+
+	logfile << peer->getIP() << ": closing: " << errmsg << std::endl;
 }
 
 void Torrent::disconnectPeers()
@@ -325,51 +329,58 @@ void Torrent::sendBitfield(const PeerPtr &peer)
 
 void Torrent::requestPiece(const PeerPtr &peer)
 {
-	size_t index = m_fileManager.getPieceforRequest([peer] (size_t i) { return peer->hasPiece(i); });
+	size_t index = m_fileManager.getPieceforRequest(std::bind(&Peer::hasPiece, peer, std::placeholders::_1));
 	if (index != std::numeric_limits<size_t>::max())
 		peer->sendPieceRequest(index);
 }
 
 bool Torrent::handlePieceCompleted(const PeerPtr &peer, uint32_t index, DataBuffer<uint8_t> &&data)
 {
-	uint32_t downloaded = data.size();
-	if (m_fileManager.writePieceBlock(index, peer->ip(), std::move(data))) {
-		m_downloadedBytes += downloaded;
+	logfile << peer->getIP() << ": finished downloading piece: " << index << std::endl;
+	if (m_fileManager.writePieceBlock(index, peer->ip(), std::move(data)))
 		return true;
-	}
 
-	m_wastedBytes += downloaded;
+	m_wastedBytes += data.size();
 	++m_hashMisses;
 	return false;
 }
 
 bool Torrent::handleRequestBlock(const PeerPtr &peer, uint32_t index, uint32_t begin, uint32_t length)
 {
+	logfile << peer->getIP() << ": Requested piece block: " << index << std::endl;
 	return m_fileManager.requestPieceBlock(index, peer->ip(), begin, length);
 }
 
-void Torrent::onPieceWriteComplete(uint32_t from, uint32_t index)
+void Torrent::onPieceWriteComplete(uint32_t from, size_t index)
 {
+	logfile << ip2str(from) << ": Finished writing piece: " << index << std::endl;
+	logfile << "Pieces so far: " << m_fileManager.completedPieces() << "/" << m_fileManager.totalPieces() << std::endl;
+
+	m_downloadedBytes += m_fileManager.pieceSize(index);
 	for (const auto &it : m_peers)
-		if (!it.second->hasPiece(index))
+		if (it.second->ip() != from && !it.second->hasPiece(index))
 			it.second->sendHave(index);
 }
 
-void Torrent::onPieceReadComplete(uint32_t from, uint32_t index, uint32_t begin, uint8_t *block, size_t size)
+void Torrent::onPieceReadComplete(uint32_t from, size_t index, int64_t begin, uint8_t *block, size_t size)
 {
 	auto it = m_peers.find(from);
 	if (it != m_peers.end()) {
 		it->second->sendPieceBlock(index, begin, block, size);
 		m_uploadedBytes += size;
 	}
+
+	delete []block;
 }
 
 void Torrent::handleTrackerError(Tracker *tracker, const std::string &error)
 {
+	logfile << tracker->host() << ": (T): " << error << std::endl;
 }
 
 void Torrent::handlePeerDebug(const PeerPtr &peer, const std::string &msg)
 {
+	logfile << peer->getIP() << ": " << msg << std::endl;
 }
 
 void Torrent::handleNewPeer(const PeerPtr &peer)

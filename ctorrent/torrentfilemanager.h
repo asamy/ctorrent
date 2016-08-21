@@ -33,8 +33,8 @@
 struct TorrentFileInfo {
 	std::string path;
 	size_t index;
-	int64_t begin;
-	int64_t length;
+	size_t begin;
+	size_t length;
 };
 typedef std::vector<TorrentFileInfo> TorrentFiles;
 
@@ -46,6 +46,7 @@ public:
 	~TorrentFileManager();
 
 	const bitset *completedBits() const;
+	size_t pending() const;
 	size_t pieceSize(size_t index) const;
 	size_t completedPieces() const;
 	size_t totalPieces() const;
@@ -53,8 +54,9 @@ public:
 	size_t computeDownloaded();
 
 	bool pieceDone(size_t index) const;
+	bool piecePending(size_t index) const;
 	bool registerFiles(const std::string &baseDir, const TorrentFiles &files);
-	bool requestPieceBlock(size_t index, uint32_t from, int64_t begin, int64_t size);
+	bool requestPieceBlock(size_t index, uint32_t from, size_t begin, size_t size);
 	bool writePieceBlock(size_t index, uint32_t from, DataBuffer<uint8_t> &&data);
 
 private:

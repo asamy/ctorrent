@@ -76,10 +76,10 @@ public:
 	clock_t elapsed();
 
 	// Get associated meta info for this torrent
-	const TorrentMeta *meta() const { return &m_meta; }
+	TorrentMeta *meta() { return &m_meta; }
 
 	// Get associated file manager for this torrent
-	const TorrentFileManager *fileManager() const { return &m_fileManager; }
+	TorrentFileManager *fileManager() { return &m_fileManager; }
 
 protected:
 	bool queryTrackers(const TrackerQuery &r, uint16_t port);
@@ -108,8 +108,8 @@ protected:
 
 public:
 	// TorrentFileManager -> Torrent
-	void onPieceWriteComplete(uint32_t from, uint32_t index);
-	void onPieceReadComplete(uint32_t from, uint32_t index, uint32_t begin, uint8_t *block, size_t size);
+	void onPieceWriteComplete(uint32_t from, size_t index);
+	void onPieceReadComplete(uint32_t from, size_t index, int64_t begin, uint8_t *block, size_t size);
 
 private:
 	Server *m_listener;

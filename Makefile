@@ -13,9 +13,9 @@ DEP_DIR = dep
 DEPFLAGS = -MT $@ -MMD -MP -MF $(DEP_DIR)/$*.d
 
 CXX = $(CROSS_BUILD)g++
-BTYPE = -O3
+BTYPE = -O0 -g
 CXXFLAGS = -std=c++0x $(DEPFLAGS) $(BTYPE) -fopenmp \
-	   -Wall -Wextra -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter -I"."
+	   -Wall -Wextra -Werror -Wno-unused-variable -Wno-unused-parameter -I"."
 
 LIBS += -fopenmp -lboost_system -lboost_filesystem -lboost_program_options
 ifeq ($(OS),Windows_NT)

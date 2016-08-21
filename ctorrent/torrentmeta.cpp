@@ -86,7 +86,7 @@ bool TorrentMeta::internalParse(Dictionary &dict, Bencode &bencode)
 	sha1.get_digest(m_checkSum);
 
 	m_name = Bencode::cast<std::string>(info["name"]);
-	m_pieceLength = Bencode::cast<int64_t>(info["piece length"]);
+	m_pieceLength = Bencode::cast<size_t>(info["piece length"]);
 
 	std::string pieces = Bencode::cast<std::string>(info["pieces"]);
 	m_sha1sums.reserve(pieces.size() / 20);
@@ -111,7 +111,7 @@ bool TorrentMeta::internalParse(Dictionary &dict, Bencode &bencode)
 		m_dirName = Bencode::cast<std::string>(info["name"]);
 
 		size_t index = 0;
-		int64_t begin = 0;
+		size_t begin = 0;
 
 		const boost::any &any = info["files"];
 		if (any.type() == typeid(Dictionary)) {
@@ -119,7 +119,7 @@ bool TorrentMeta::internalParse(Dictionary &dict, Bencode &bencode)
 				Dictionary v = Bencode::cast<Dictionary>(pair.second);
 				VectorType pathList = Bencode::cast<VectorType>(v["path"]);
 	
-				if (!parseFile(pathList, index, begin, Bencode::cast<int64_t>(v["length"])))
+				if (!parseFile(pathList, index, begin, Bencode::cast<size_t>(v["length"])))
 					return false;
 			}
 		} else if (any.type() == typeid(VectorType)) {
@@ -127,7 +127,7 @@ bool TorrentMeta::internalParse(Dictionary &dict, Bencode &bencode)
 				Dictionary v = Bencode::cast<Dictionary>(f);
 				VectorType pathList = Bencode::cast<VectorType>(v["path"]);
 
-				if (!parseFile(pathList, index, begin, Bencode::cast<int64_t>(v["length"])))
+				if (!parseFile(pathList, index, begin, Bencode::cast<size_t>(v["length"])))
 					return false;
 			}
 		} else {
@@ -135,7 +135,7 @@ bool TorrentMeta::internalParse(Dictionary &dict, Bencode &bencode)
 			return false;
 		}
 	} else {
-		int64_t length = Bencode::cast<int64_t>(info["length"]);
+		size_t length = Bencode::cast<size_t>(info["length"]);
 		if (length <= 0)
 			return false;
 
@@ -153,7 +153,7 @@ bool TorrentMeta::internalParse(Dictionary &dict, Bencode &bencode)
 	return true;
 }
 
-bool TorrentMeta::parseFile(const VectorType &pathList, size_t &index, int64_t &begin, int64_t length)
+bool TorrentMeta::parseFile(const VectorType &pathList, size_t &index, size_t &begin, size_t length)
 {
 	std::string path = "";
 	for (const boost::any &any : pathList) {

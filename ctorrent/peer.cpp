@@ -97,7 +97,7 @@ void Peer::verify()
 		m_peerId = peerId;
 		m_conn->write(m_handshake, 68);
 		m_torrent->handleNewPeer(shared_from_this());
-		m_eventId = g_sched.addEvent(std::bind(&Peer::sendKeepAlive, shared_from_this()), KEEPALIVE_INTERVAL);
+//		m_eventId = g_sched.addEvent(std::bind(&Peer::sendKeepAlive, shared_from_this()), KEEPALIVE_INTERVAL);
 		m_conn->read(4, std::bind(&Peer::handle, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 	});
 }
@@ -226,7 +226,7 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 			return handleError("received too big piece block of size " + bytesToHumanReadable(payloadSize, true));
 
 		auto it = std::find_if(m_queue.begin(), m_queue.end(),
-				[index](const Piece *piece) { return piece->index == index; });
+				       [index](const Piece *piece) { return piece->index == index; });
 		if (it == m_queue.end())
 			return handleError("received piece " + std::to_string(index) + " which we did not ask for");
 
@@ -240,17 +240,11 @@ void Peer::handleMessage(MessageType messageType, InputMessage in)
 			m_queue.erase(it);
 			delete piece;
 		} else {
-			PieceBlock *block = &piece->blocks[blockIndex];
 			uint8_t *payload = in.getBuffer(payloadSize);
-			if (block->rpos != 0) {
-				memcpy(block->data, payload, std::max(payloadSize, block->size - block->rpos));
-				free(payload);
-				block->rpos += payloadSize;
-			} else {
-				block->size = block->rpos = payloadSize;
-				block->data = payload;
-				++piece->currentBlocks;
-			}
+			PieceBlock *block = &piece->blocks[blockIndex];
+			block->size = payloadSize;
+			block->data = payload;
+			++piece->currentBlocks;
 
 			if (piece->currentBlocks == piece->numBlocks) {
 				DataBuffer<uint8_t> pieceData;
@@ -311,7 +305,7 @@ void Peer::handlePieceBlockData(size_t index, size_t begin, const uint8_t *block
 {
 	// Check if piece block cancel was issued
 	auto it = std::find_if(m_requestedBlocks.begin(), m_requestedBlocks.end(),
-			[=] (const PieceBlockInfo &i) { return i.index == index && i.begin == begin; } );
+			       [=] (const PieceBlockInfo &i) { return i.index == index && i.begin == begin; } );
 	if (it == m_requestedBlocks.end())
 		return;
 

@@ -79,16 +79,10 @@ public:
 
 	size_t popcnt(uint64_t v) const
 	{
-#ifdef __GNUC__
-		return __builtin_popcount(v);
-#elif _MSC_VER
-		return __popcnt64(v);
-#else
 		// Hamming Weight
 		v = v - ((v >> 1) & 0x5555555555555555);
 		v = (v & 0x3333333333333333) + ((v >> 2) & 0x3333333333333333);
 		return (((v + (v >> 4)) & 0x0F0F0F0F0F0F0F0F) * 0x0101010101010101) >> 56;
-#endif
 	}
 
 	size_t size() const { return m_size; }
@@ -107,7 +101,7 @@ public:
 			src += 4;
 		}
 
-		if (src + 1 < dst) {
+		if (src + 1 <= dst) {
 			set += popcnt(*(uint16_t *)src);
 			src += 2;
 		}

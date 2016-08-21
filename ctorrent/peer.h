@@ -66,11 +66,7 @@ public:
 	void connect(const std::string &ip, const std::string &port);
 
 protected:
-	// Process piece blocks requested, send keepalive, etc.
-	void process();
-	// Used only in server verification (e.g. peer connected to us)
 	void verify();
-
 	void handle(const uint8_t *data, size_t size);
 	void handleMessage(MessageType mType, InputMessage in);
 	void handleError(const std::string &errmsg);
@@ -100,10 +96,9 @@ protected:
 private:
 	struct PieceBlock {
 		size_t size;
-		size_t rpos;
 		uint8_t *data;
 
-		PieceBlock() { data = nullptr; size = rpos = 0; }
+		PieceBlock() { data = nullptr; size  = 0; }
 		~PieceBlock() { delete []data; }
 	};
 

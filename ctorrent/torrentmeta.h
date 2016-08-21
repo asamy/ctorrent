@@ -50,12 +50,12 @@ public:
 	inline VectorType trackers() const { return m_trackers; }
 
 	inline const uint32_t *checkSum() const { return &m_checkSum[0]; }
-	inline int64_t pieceLength() const { return m_pieceLength; }
+	inline size_t pieceLength() const { return m_pieceLength; }
 	inline size_t totalSize() const { return m_totalSize; }
 
 protected:
 	bool internalParse(Dictionary &d, Bencode &b);
-	bool parseFile(const VectorType &pathList, size_t &index, int64_t &begin, int64_t length);
+	bool parseFile(const VectorType &pathList, size_t &index, size_t &begin, size_t length);
 
 private:
 	std::string m_dirName;
@@ -65,7 +65,7 @@ private:
 	std::string m_mainTracker;
 
 	uint32_t m_checkSum[5];
-	int64_t m_pieceLength;
+	size_t m_pieceLength;
 	size_t m_totalSize;
 
 	TorrentFiles m_files;

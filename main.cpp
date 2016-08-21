@@ -27,12 +27,15 @@
 #include <functional>
 #include <chrono>
 #include <iostream>
-
+#include <fstream>
 #include <boost/program_options.hpp>
 
 #ifndef _WIN32
 #include <ncurses.h>
 #endif
+
+/* Externed  */
+std::ofstream logfile;
 
 #ifdef _WIN32
 enum {
@@ -75,15 +78,15 @@ enum {
 
 static void print_stats(Torrent *t)
 {
-	const TorrentMeta *meta = t->meta();
-	const TorrentFileManager *fm = t->fileManager();
+	TorrentMeta *meta = t->meta();
+	TorrentFileManager *fm = t->fileManager();
 
 	printc(COL_GREEN, "%s: ", meta->name().c_str());
-	printc(COL_YELLOW, "%.2f Mbps (%zd/%zd MB) [ %zd hash miss - %zd wasted - %.2f minutes left ] ",
+	printc(COL_YELLOW, "%.2f Mbps (%zd/%zd MB) [ %zd uploaded - %zd hash miss - %zd wasted - %.2f seconds left ] ",
 				t->downloadSpeed(), t->computeDownloaded() / 1024 / 1024, meta->totalSize() / 1024 / 1024,
-				t->hashMisses(), t->wastedBytes(), t->eta() / 60);
-	printc(COL_YELLOW, "[ %zd/%zd pieces %zd peers active ]\n",
-				fm->completedPieces(), fm->totalPieces(), t->activePeers());
+				t->uploadedBytes(), t->hashMisses(), t->wastedBytes(), t->eta());
+	printc(COL_YELLOW, "[ %zd/%zd/%zd pieces %zd peers active ]\n",
+				fm->completedPieces(), fm->pending(), fm->totalPieces(), t->activePeers());
 }
 
 static void print_all_stats(Torrent *torrents, size_t total)
@@ -109,10 +112,12 @@ static void print_all_stats(Torrent *torrents, size_t total)
 
 int main(int argc, char *argv[])
 {
-	bool noseed = false;
+	bool noseed = true;
 	bool nodownload = false;
 	int startport = 6881;
+	size_t max_peers = 15;
 	std::string dldir = "Torrents";
+	std::string lfname = "ctorrent.log";
 	std::vector<std::string> files;
 
 	namespace po = boost::program_options;
@@ -121,10 +126,12 @@ int main(int argc, char *argv[])
 		("version,v", "print version string")
 		("help,h", "print this help message")
 		("port,p", po::value(&startport), "specify start port for seeder torrents")
+		("peers,m", po::value(&max_peers), "maximum amount of peers to feel sufficient with")
 		("nodownload,n", po::bool_switch(&nodownload), "do not download anything, just print info about torrents")
 		("piecesize,s", po::value(&maxRequestSize), "specify piece block size")
 		("dldir,d", po::value(&dldir), "specify downloads directory")
 		("noseed,e", po::bool_switch(&noseed), "do not seed after download has finished.")
+		("log,l", po::value(&lfname), "specify log file name")
 		("torrents,t", po::value<std::vector<std::string>>(&files)->required()->multitoken(), "specify torrent file(s)");
 
 	if (argc == 1) {
@@ -157,6 +164,12 @@ int main(int argc, char *argv[])
 
 	if (vm.count("piecesize"))
 		maxRequestSize = 1 << (32 - __builtin_clz(maxRequestSize - 1));
+
+	logfile.open(lfname, std::ios_base::trunc | std::ios_base::out);
+	if (!logfile.is_open()) {
+		std::cerr << "Cannot open log file " << lfname << ": " << errno << std::endl;
+		return 1;
+	}
 
 	size_t total = files.size();
 	size_t total_bits = 0;
@@ -221,12 +234,17 @@ int main(int argc, char *argv[])
 		std::clog << "Downloading torrents..." << std::endl;
 		while (total_bits ^ (completed | errors)) {
 			for (size_t i = 0; i < total; ++i) {
+				if (errors & (1 << i))
+					continue;
+
 				Torrent *t = &torrents[i];
 				if (t->isFinished()) {
-					t->finish();
+					if (!noseed)
+						t->finish();
 					completed |= 1 << i;
 				} else {
-					t->checkTrackers();
+					//if (t->activePeers() < max_peers)
+						t->checkTrackers();
 					if (!noseed)
 						t->nextConnection();
 				}
@@ -249,7 +267,7 @@ int main(int argc, char *argv[])
 		while (eseed ^ total_bits) {
 			for (size_t i = 0; i < total; ++i) {
 				Torrent *t = &torrents[i];
-				if (!t->nextConnection() || !t->checkTrackers())
+				if (!t->nextConnection() || (t->activePeers() < max_peers && !t->checkTrackers()))
 					eseed |= 1 << i;
 			}
 
@@ -276,6 +294,7 @@ int main(int argc, char *argv[])
 	}
 
 	delete []torrents;
+	logfile.close();
 	return 0;
 }
 

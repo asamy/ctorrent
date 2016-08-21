@@ -136,7 +136,7 @@ bool Tracker::httpRequest(const TrackerQuery &r)
 	}
 
 	m_timeToNextRequest = std::chrono::system_clock::now()
-		+ std::chrono::milliseconds(Bencode::cast<int64_t>(dict["interval"]));
+		+ std::chrono::seconds(Bencode::cast<int64_t>(dict["interval"]));
 	m_torrent->connectToPeers(dict["peers"]);
 	return true;
 }
@@ -246,7 +246,7 @@ bool Tracker::udpRequest(const TrackerQuery &r)
 		return false;
 	}
 
-	m_timeToNextRequest = std::chrono::system_clock::now() + std::chrono::milliseconds(readBE32(&response[8]));
+	m_timeToNextRequest = std::chrono::system_clock::now() + std::chrono::seconds(readBE32(&response[8]));
 	m_torrent->rawConnectPeers(&response[20], len - 20);
 	return true;
 }
