@@ -84,11 +84,14 @@ public:
 	}
 
 	void stop() {
+		mutex.lock();
 		m_stopped = true;
-		m_condition.notify_one();
+		mutex.unlock();
+		m_condition.notify_all();
 		m_thread.join();
 		m_dispatcherThread.join();
 	}
+	void notify_one() { m_condition.notify_one(); }
 	void notify_all() { m_condition.notify_all(); }
 
 protected:
@@ -122,7 +125,7 @@ uint32_t Scheduler::addEvent(const SchedulerCallback &cb, uint32_t ms)
 	i->events.push(ev);
 	i->mutex.unlock();
 	if (notify)
-		i->notify_all();
+		i->notify_one();
 
 	return ev.id();
 }
@@ -174,7 +177,7 @@ void SchedulerImpl::thread()
 		// Ugly hack for newly added events
 fart:
 		bool cont = m_condition.wait_until(m, std::chrono::system_clock::now()
-				+ std::chrono::milliseconds(5), [this] () { return events.top().expired(); });
+				+ std::chrono::milliseconds(5), [this] () { return events.top().expired() || m_stopped; });
 		if (m_stopped)
 			break;
 		else if (!cont)

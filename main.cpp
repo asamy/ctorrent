@@ -178,7 +178,7 @@ int main(int argc, char *argv[])
 	size_t eseed = 0;
 	size_t started = 0;
 
-	Torrent *torrents = new Torrent[total]; 	// Workaround for CLang non-POD
+	std::vector<Torrent> torrents(total);
 	for (size_t i = 0; i < total; ++i) {
 		std::string file = files[i];
 		Torrent *t = &torrents[i];
@@ -251,7 +251,7 @@ int main(int argc, char *argv[])
 			}
 
 			Connection::poll();
-			print_all_stats(torrents, total);
+			print_all_stats(&torrents[0], total);
 			std::this_thread::sleep_for(std::chrono::milliseconds(5));
 		}
 	}
@@ -272,7 +272,7 @@ int main(int argc, char *argv[])
 			}
 
 			Connection::poll();
-			print_all_stats(torrents, total);
+			print_all_stats(&torrents[0], total);
 			std::this_thread::sleep_for(std::chrono::milliseconds(5));
 		}
 	}
@@ -293,7 +293,6 @@ int main(int argc, char *argv[])
 		std::clog << meta->name() << std::endl;
 	}
 
-	delete []torrents;
 	logfile.close();
 	return 0;
 }

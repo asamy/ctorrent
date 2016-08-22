@@ -78,8 +78,9 @@ public:
 	}
 
 	~TorrentFileManagerImpl() {
+		lock();
 		m_stopped = true;
-		m_condition.notify_all();
+		unlock_and_notify();
 		m_thread.join();
 	}
 
@@ -288,6 +289,9 @@ void TorrentFileManagerImpl::thread()
 
 			m_readRequests.pop();	
 		}
+
+		if (m_stopped)
+			break;
 
 		lock.unlock();
 	}
