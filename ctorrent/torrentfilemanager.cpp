@@ -179,7 +179,7 @@ void TorrentFileManagerImpl::scan_file(const TorrentFile &f)
 	fseek(fp, 0L, SEEK_SET);
 
 	if (f.info.length > fileLength) {
-		truncate(f.info.path.c_str(), f.info.length);
+//		truncate(f.info.path.c_str(), f.info.length);
 		return;
 	}
 

@@ -1,25 +1,16 @@
-ifeq ("$(origin C)", "command line")
-	CROSS_BUILD = x86_64-w64-mingw32-
-	LIBS = -static-libgcc -static-libstdc++
-else
-	CROSS_BUILD = 
-	LIBS = 
-endif
-
 BIN_DIR = bin
-BIN = $(BIN_DIR)/ctorrent
+BIN = ctorrent
 
 DEP_DIR = dep
 DEPFLAGS = -MT $@ -MMD -MP -MF $(DEP_DIR)/$*.d
 
 CXX = $(CROSS_BUILD)g++
-BTYPE = -O2
-CXXFLAGS = -std=c++0x $(DEPFLAGS) $(BTYPE) -fopenmp \
-	   -Wall -Wextra -Werror -Wno-unused-variable -Wno-unused-parameter -I"."
+BTYPE = -O3
+CXXFLAGS = -std=c++11 $(DEPFLAGS) $(BTYPE) -fopenmp -Wall -Wextra -Wno-deprecated-declarations -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter -I"." -I"J:\win_libs\boost_1_60_0"
 
-LIBS += -fopenmp -lboost_system -lboost_filesystem -lboost_program_options
+LIBS = -fopenmp -L"J:\win_libs\boost_1_60_0\stage\lib" -lboost_system -lboost_filesystem -lboost_program_options -static-libgcc -static-libstdc++ --static
 ifeq ($(OS),Windows_NT)
-LIBS += -lws2_32 -lshlwapi
+LIBS += -lws2_32 -lshlwapi -lMswsock
 else
 LIBS += -lpthread -lcurses
 endif
@@ -44,7 +35,7 @@ clean:
 	$(RM) $(DEP_DIR)/*/*.d
 	$(RM) $(BIN)
 
-$(BIN): $(DEP_DIR) $(OBJ_DIR) $(BIN_DIR) $(OBJ) $(DEP)
+$(BIN): $(DEP_DIR) $(OBJ_DIR) $(OBJ) $(DEP)
 #	@echo "LD   $@"
 	$(CXX) -o $@ $(OBJ) $(LIBS)
 
@@ -61,9 +52,6 @@ $(DEP_DIR):
 	@mkdir -p $(DEP_DIR)/ctorrent
 	@mkdir -p $(DEP_DIR)/net
 	@mkdir -p $(DEP_DIR)/util
-
-$(BIN_DIR):
-	@mkdir -p $(BIN_DIR)
 
 $(OBJ_DIR):
 	@mkdir -p $(OBJ_DIR)
