@@ -13,7 +13,7 @@ DEP_DIR = dep
 DEPFLAGS = -MT $@ -MMD -MP -MF $(DEP_DIR)/$*.d
 
 CXX = $(CROSS_BUILD)g++
-BTYPE = -O0 -g
+BTYPE = -O2
 CXXFLAGS = -std=c++0x $(DEPFLAGS) $(BTYPE) -fopenmp \
 	   -Wall -Wextra -Werror -Wno-unused-variable -Wno-unused-parameter -I"."
 

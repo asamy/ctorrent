@@ -115,7 +115,7 @@ int main(int argc, char *argv[])
 	bool noseed = true;
 	bool nodownload = false;
 	int startport = 6881;
-	size_t max_peers = 15;
+	size_t max_peers = 30;
 	std::string dldir = "Torrents";
 	std::string lfname = "ctorrent.log";
 	std::vector<std::string> files;
@@ -243,7 +243,7 @@ int main(int argc, char *argv[])
 						t->finish();
 					completed |= 1 << i;
 				} else {
-					//if (t->activePeers() < max_peers)
+					if (t->activePeers() < max_peers)
 						t->checkTrackers();
 					if (!noseed)
 						t->nextConnection();
