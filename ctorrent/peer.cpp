@@ -22,8 +22,6 @@
 #include "peer.h"
 #include "torrent.h"
 
-#include <util/scheduler.h>
-
 #define KEEPALIVE_INTERVAL	30 * 1000
 
 Peer::Peer(Torrent *torrent)
@@ -53,7 +51,7 @@ void Peer::disconnect()
 {
 	m_conn->close(false);
 	m_conn->setErrorCallback(nullptr);	// deref
-	g_sched.stopEvent(m_eventId);
+//	g_sched.stopEvent(m_eventId);
 }
 
 void Peer::connect(const std::string &ip, const std::string &port)
@@ -320,7 +318,7 @@ void Peer::sendKeepAlive()
 	m_conn->write(keepalive, sizeof(keepalive));
 
 	// re-schedule
-	m_eventId = g_sched.addEvent(std::bind(&Peer::sendKeepAlive, shared_from_this()), KEEPALIVE_INTERVAL);
+	// m_eventId = g_sched.addEvent(std::bind(&Peer::sendKeepAlive, shared_from_this()), KEEPALIVE_INTERVAL);
 }
 
 void Peer::sendChoke()

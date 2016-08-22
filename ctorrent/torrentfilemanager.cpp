@@ -23,9 +23,10 @@
 #include "torrent.h"
 
 #include <util/auxiliar.h>
-#include <util/scheduler.h>
+//#include <util/scheduler.h>
 
 #include <thread>
+#include <future>
 #include <mutex>
 #include <atomic>
 #include <condition_variable>
@@ -327,7 +328,8 @@ bool TorrentFileManagerImpl::process_read(const ReadRequest &r)
 		}
 	}
 
-	g_sched.addEvent(std::bind(&Torrent::onPieceReadComplete, m_torrent, r.from, r.index, r.begin, block, r.size), 0);
+	std::async(std::launch::async,
+		   std::bind(&Torrent::onPieceReadComplete, m_torrent, r.from, r.index, r.begin, block, r.size));
 	return true;
 }
 
@@ -362,7 +364,8 @@ bool TorrentFileManagerImpl::process_write(const WriteRequest &w)
 
 	m_pendingBits.clear(w.index);
 	m_completedBits.set(w.index);
-	g_sched.addEvent(std::bind(&Torrent::onPieceWriteComplete, m_torrent, w.from, w.index), 0);
+	std::async(std::launch::async,
+		   std::bind(&Torrent::onPieceWriteComplete, m_torrent, w.from, w.index));
 	return true;
 }
 
