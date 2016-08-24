@@ -213,7 +213,7 @@ bool Torrent::queryTracker(const std::string &furl, const TrackerQuery &q, uint1
 
 void Torrent::rawConnectPeers(const uint8_t *peers, size_t size)
 {
-	m_peers.reserve(m_peers.max_size() + size / 6);
+	m_peers.reserve(m_peers.size() + size / 6);
 
 	// 6 bytes each (first 4 is ip address, last 2 port) all in big endian notation
 	for (size_t i = 0; i < size; i += 6) {
@@ -265,7 +265,7 @@ void Torrent::connectToPeers(const boost::any &_peers)
 
 	if (_peers.type() == typeid(Dictionary)) {	// no compat
 		Dictionary peers = *boost::unsafe_any_cast<Dictionary>(&_peers);
-		m_peers.reserve(m_peers.max_size() + peers.size());
+		m_peers.reserve(m_peers.size() + peers.size());
 
 		try {
 			for (const auto &pair : peers) {
@@ -277,7 +277,7 @@ void Torrent::connectToPeers(const boost::any &_peers)
 		}
 	} else if (_peers.type() == typeid(VectorType)) {
 		VectorType peers = *boost::unsafe_any_cast<VectorType>(&_peers);
-		m_peers.reserve(m_peers.max_size() + peers.size());
+		m_peers.reserve(m_peers.size() + peers.size());
 
 		try {
 			for (const boost::any &any : peers) {
