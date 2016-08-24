@@ -126,7 +126,7 @@ int main(int argc, char *argv[])
 		("version,v", "print version string")
 		("help,h", "print this help message")
 		("port,p", po::value(&startport), "specify start port for seeder torrents")
-		("peers,m", po::value(&max_peers), "maximum amount of peers to feel sufficient with")
+		("peers,m", po::value(&max_peers), "maximum amount of peers to feel sufficient with, 0 implies as many as possible")
 		("nodownload,n", po::bool_switch(&nodownload), "do not download anything, just print info about torrents")
 		("piecesize,s", po::value(&maxRequestSize), "specify piece block size")
 		("dldir,d", po::value(&dldir), "specify downloads directory")
@@ -243,7 +243,7 @@ int main(int argc, char *argv[])
 						t->finish();
 					completed |= 1 << i;
 				} else {
-					if (t->activePeers() < max_peers)
+					if (max_peers == 0 || t->activePeers() < max_peers)
 						t->checkTrackers();
 					if (!noseed)
 						t->nextConnection();
