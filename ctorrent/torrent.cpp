@@ -241,8 +241,7 @@ void Torrent::rawConnectPeer(Dictionary &peerInfo)
 	int64_t port = boost::any_cast<int64_t>(peerInfo["port"]);
 
 	uint32_t strip = str2ip(ip);
-	if (m_blacklisted.find(strip) != m_blacklisted.end()
-		|| m_peers.find(strip) != m_peers.end())
+	if (m_blacklisted.find(strip) != m_blacklisted.end() || m_peers.find(strip) != m_peers.end())
 		return;
 
 	// Asynchronously connect to that peer, and do not add it to our
