@@ -213,7 +213,7 @@ bool Torrent::queryTracker(const std::string &furl, const TrackerQuery &q, uint1
 
 void Torrent::rawConnectPeers(const uint8_t *peers, size_t size)
 {
-	m_peers.reserve(size / 6);
+	m_peers.reserve(m_peers.max_size() + size / 6);
 
 	// 6 bytes each (first 4 is ip address, last 2 port) all in big endian notation
 	for (size_t i = 0; i < size; i += 6) {
@@ -265,7 +265,7 @@ void Torrent::connectToPeers(const boost::any &_peers)
 
 	if (_peers.type() == typeid(Dictionary)) {	// no compat
 		Dictionary peers = *boost::unsafe_any_cast<Dictionary>(&_peers);
-		m_peers.reserve(peers.size());
+		m_peers.reserve(m_peers.max_size() + peers.size());
 
 		try {
 			for (const auto &pair : peers) {
@@ -273,10 +273,11 @@ void Torrent::connectToPeers(const boost::any &_peers)
 				rawConnectPeer(peerInfo);
 			}
 		} catch (const std::exception &e) {
+			logfile << "connectToPeers(): non-compat Dictionary-type, exception: " << e.what() << std::endl;
 		}
 	} else if (_peers.type() == typeid(VectorType)) {
 		VectorType peers = *boost::unsafe_any_cast<VectorType>(&_peers);
-		m_peers.reserve(peers.size());
+		m_peers.reserve(m_peers.max_size() + peers.size());
 
 		try {
 			for (const boost::any &any : peers) {
@@ -284,6 +285,7 @@ void Torrent::connectToPeers(const boost::any &_peers)
 				rawConnectPeer(peerInfo);
 			}
 		} catch (const std::exception &e) {
+			logfile << "connectToPeers(): non-compat Vector-type, exception: " << e.what() << std::endl;
 		}
 	}
 }
@@ -304,7 +306,7 @@ void Torrent::removePeer(const PeerPtr &peer, const std::string &errmsg)
 	if (it != m_peers.end())
 		m_peers.erase(it);
 
-	logfile << peer->getIP() << ": closing: " << errmsg << std::endl;
+	logfile << peer->getIP() << ": closing link: " << errmsg << std::endl;
 }
 
 void Torrent::disconnectPeers()
