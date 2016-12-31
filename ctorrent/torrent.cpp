@@ -31,6 +31,7 @@
 #include <thread>
 #include <random>
 #include <fstream>
+#include <future>
 
 extern std::ofstream logfile;
 
@@ -154,9 +155,9 @@ bool Torrent::finish()
 bool Torrent::checkTrackers()
 {
 	for (Tracker *tracker : m_activeTrackers)
-		if (tracker->timeUp() && tracker->query(makeTrackerQuery(TrackerEvent::None)))
-			return true;
-	return false;
+		if (tracker->timeUp())
+			std::async(std::launch::async, std::bind(&Tracker::query, tracker, makeTrackerQuery(TrackerEvent::None)));
+	return true;
 }
 
 bool Torrent::nextConnection()

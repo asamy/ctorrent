@@ -81,7 +81,7 @@ static void print_stats(Torrent *t)
 	TorrentMeta *meta = t->meta();
 	TorrentFileManager *fm = t->fileManager();
 
-	printc(COL_GREEN, "%s: ", meta->name().c_str());
+	printc(COL_GREEN, "\r%s: ", meta->name().c_str());
 	printc(COL_YELLOW, "%.2f Mbps (%zd/%zd MB) [ %zd uploaded - %zd hash miss - %zd wasted - %.2f seconds left ] ",
 				t->downloadSpeed(), t->computeDownloaded() / 1024 / 1024, meta->totalSize() / 1024 / 1024,
 				t->uploadedBytes(), t->hashMisses(), t->wastedBytes(), t->eta());

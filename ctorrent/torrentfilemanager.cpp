@@ -345,7 +345,7 @@ bool TorrentFileManagerImpl::process_write(const WriteRequest &w)
 	for (const TorrentFile &f : m_files) {
 		const TorrentFileInfo &i = f.info;
 		if (beginPos < i.begin)
-			return false;
+			break;
 
 		size_t fileEnd = i.begin + i.length;
 		if (beginPos >= fileEnd)

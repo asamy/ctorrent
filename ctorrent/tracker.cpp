@@ -24,6 +24,7 @@
 
 #include <boost/array.hpp>
 #include <thread>
+#include <random>
 
 bool Tracker::query(const TrackerQuery &req)
 {

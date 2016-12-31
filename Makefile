@@ -6,9 +6,9 @@ DEPFLAGS = -MT $@ -MMD -MP -MF $(DEP_DIR)/$*.d
 
 CXX = $(CROSS_BUILD)g++
 BTYPE = -O3
-CXXFLAGS = -std=c++11 $(DEPFLAGS) $(BTYPE) -fopenmp -Wall -Wextra -Wno-deprecated-declarations -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter -I"." -I"J:\win_libs\boost_1_60_0"
+CXXFLAGS = -std=c++11 $(DEPFLAGS) $(BTYPE) -fopenmp -Wall -Wextra -Wno-deprecated-declarations -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter -I"." -I"D:\boost_1_60_0"
 
-LIBS = -fopenmp -L"J:\win_libs\boost_1_60_0\stage\lib" -lboost_system -lboost_filesystem -lboost_program_options -static-libgcc -static-libstdc++ --static
+LIBS = -fopenmp -L"D:\boost_1_60_0\stage\lib" -lboost_system -lboost_filesystem -lboost_program_options -static-libgcc -static-libstdc++ --static
 ifeq ($(OS),Windows_NT)
 LIBS += -lws2_32 -lshlwapi -lMswsock
 else
