@@ -135,9 +135,7 @@ private:
 	std::vector<Piece *> m_queue;
 	std::vector<PieceBlockInfo> m_requestedBlocks;
 	std::string m_peerId;
-
 	uint8_t m_state;
-	uint32_t m_eventId;
 
 	Torrent *m_torrent;
 	ConnectionPtr m_conn;

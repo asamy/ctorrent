@@ -51,7 +51,6 @@ void Peer::disconnect()
 {
 	m_conn->close(false);
 	m_conn->setErrorCallback(nullptr);	// deref
-//	g_sched.stopEvent(m_eventId);
 }
 
 void Peer::connect(const std::string &ip, const std::string &port)
@@ -95,7 +94,6 @@ void Peer::verify()
 		m_peerId = peerId;
 		m_conn->write(m_handshake, 68);
 		m_torrent->handleNewPeer(shared_from_this());
-//		m_eventId = g_sched.addEvent(std::bind(&Peer::sendKeepAlive, shared_from_this()), KEEPALIVE_INTERVAL);
 		m_conn->read(4, std::bind(&Peer::handle, shared_from_this(), std::placeholders::_1, std::placeholders::_2));
 	});
 }
@@ -316,9 +314,6 @@ void Peer::sendKeepAlive()
 {
 	const uint8_t keepalive[] = { 0, 0, 0, 0 };
 	m_conn->write(keepalive, sizeof(keepalive));
-
-	// re-schedule
-	// m_eventId = g_sched.addEvent(std::bind(&Peer::sendKeepAlive, shared_from_this()), KEEPALIVE_INTERVAL);
 }
 
 void Peer::sendChoke()
