@@ -23,7 +23,6 @@
 #include "torrent.h"
 
 #include <util/auxiliar.h>
-//#include <util/scheduler.h>
 
 #include <thread>
 #include <future>

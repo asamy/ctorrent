@@ -256,6 +256,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	std::clog << "\nDone downloading\n" << std::endl;
 	if (!noseed && completed > 0) {
 		std::clog << "Now seeding" << std::endl;
 		for (size_t i = 0; i < total; ++i) {
@@ -293,6 +294,7 @@ int main(int argc, char *argv[])
 		std::clog << meta->name() << std::endl;
 	}
 
+	std::clog << "Finished" << std::endl;
 	logfile.close();
 	return 0;
 }

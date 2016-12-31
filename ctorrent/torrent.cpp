@@ -22,9 +22,7 @@
 #include "torrent.h"
 
 #include <net/connection.h>
-
 #include <util/auxiliar.h>
-#include <util/scheduler.h>
 
 #include <algorithm>
 #include <iostream>
