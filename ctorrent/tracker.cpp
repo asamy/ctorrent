@@ -137,7 +137,7 @@ bool Tracker::httpRequest(const TrackerQuery &r)
 	}
 
 	m_timeToNextRequest = std::chrono::system_clock::now()
-		+ std::chrono::seconds(Bencode::cast<int64_t>(dict["interval"]));
+		+ std::chrono::seconds(Bencode::cast<uint64_t>(dict["interval"]));
 	m_torrent->connectToPeers(dict["peers"]);
 	return true;
 }

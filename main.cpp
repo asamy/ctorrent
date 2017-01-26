@@ -117,7 +117,7 @@ int main(int argc, char *argv[])
 	int startport = 6881;
 	size_t max_peers = 30;
 	std::string dldir = "Torrents";
-	std::string lfname = "ctorrent.log";
+	std::string lfname = "out.txt";
 	std::vector<std::string> files;
 
 	namespace po = boost::program_options;
@@ -198,6 +198,7 @@ int main(int argc, char *argv[])
 
 			std::clog << meta->name() << ": Total size: " << bytesToHumanReadable(meta->totalSize(), true) << std::endl;
 			std::clog << meta->name() << ": Completed pieces: " << fm->completedPieces() << "/" << fm->totalPieces() << std::endl;
+			std::clog << meta->name() << ": Piece Length: " << meta->pieceLength() << std::endl;
 			completed |= 1 << i;
 			continue;
 		}

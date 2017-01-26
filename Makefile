@@ -1,14 +1,20 @@
+ifeq ("$(origin D)", "command line")
+	BTYPE := -O0 -g
+else
+	BTYPE ?= -O3
+endif
+
 BIN_DIR = bin
-BIN = ctorrent
+BIN = tc
 
 DEP_DIR = dep
 DEPFLAGS = -MT $@ -MMD -MP -MF $(DEP_DIR)/$*.d
 
-CXX = $(CROSS_BUILD)g++
-BTYPE = -O3
-CXXFLAGS = -std=c++11 $(DEPFLAGS) $(BTYPE) -fopenmp -Wall -Wextra -Wno-deprecated-declarations -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter -I"." -I"D:\boost_1_60_0"
+CXX ?= $(CROSS_BUILD)g++
+CXXFLAGS = -std=c++11 $(DEPFLAGS) $(BTYPE) -Wall -Wextra -Wno-deprecated-declarations \
+	   -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter -I"." -I"D:\boost_1_60_0"
 
-LIBS = -fopenmp -L"D:\boost_1_60_0\stage\lib" -lboost_system -lboost_filesystem -lboost_program_options -static-libgcc -static-libstdc++ --static
+LIBS = -L"D:\boost_1_60_0\stage\lib" -lboost_system -lboost_filesystem -lboost_program_options
 ifeq ($(OS),Windows_NT)
 LIBS += -lws2_32 -lshlwapi -lMswsock
 else
@@ -17,7 +23,8 @@ endif
 
 OBJ_DIR = obj
 SRC = bencode/decoder.cpp bencode/encoder.cpp \
-      ctorrent/tracker.cpp ctorrent/peer.cpp ctorrent/torrentmeta.cpp ctorrent/torrentfilemanager.cpp ctorrent/torrent.cpp \
+      ctorrent/tracker.cpp ctorrent/peer.cpp ctorrent/torrentmeta.cpp \
+      ctorrent/torrentfilemanager.cpp ctorrent/torrent.cpp \
       net/server.cpp net/connection.cpp net/inputmessage.cpp net/outputmessage.cpp \
       util/auxiliar.cpp \
       main.cpp
@@ -29,19 +36,20 @@ DEP = $(SRC:%.cpp=$(DEP_DIR)/%.d)
 
 all: $(BIN)
 clean:
-	$(RM) $(OBJ_DIR)/*.o
-	$(RM) $(OBJ_DIR)/*/*.o
-	$(RM) $(DEP_DIR)/*.d
-	$(RM) $(DEP_DIR)/*/*.d
-	$(RM) $(BIN)
+	@$(RM) $(OBJ_DIR)/*.o
+	@$(RM) $(OBJ_DIR)/*/*.o
+	@$(RM) $(DEP_DIR)/*.d
+	@$(RM) $(DEP_DIR)/*/*.d
+	@$(RM) $(BIN)
+	@echo " 	Cleaned"
 
 $(BIN): $(DEP_DIR) $(OBJ_DIR) $(OBJ) $(DEP)
-#	@echo "LD   $@"
-	$(CXX) -o $@ $(OBJ) $(LIBS)
+	@echo " 	LD   $@"
+	@$(CXX) -o $@ $(OBJ) $(LIBS)
 
 $(OBJ_DIR)/%.o: %.cpp $(DEP_DIR)/%.d
-#	@echo "CXX  $<"
-	$(CXX) -c $(CXXFLAGS) -o $@ $<
+	@echo " 	CXX  $<"
+	@$(CXX) -c $(CXXFLAGS) -o $@ $<
 
 -include $(DEP)
 $(DEP_DIR)/%.d: ;

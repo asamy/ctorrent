@@ -86,7 +86,7 @@ bool TorrentMeta::internalParse(Dictionary &dict, Bencode &bencode)
 	sha1.get_digest(m_checkSum);
 
 	m_name = Bencode::cast<std::string>(info["name"]);
-	m_pieceLength = Bencode::cast<size_t>(info["piece length"]);
+	m_pieceLength = Bencode::cast<uint64_t>(info["piece length"]);
 
 	std::string pieces = Bencode::cast<std::string>(info["pieces"]);
 	m_sha1sums.reserve(pieces.size() / 20);
@@ -135,8 +135,8 @@ bool TorrentMeta::internalParse(Dictionary &dict, Bencode &bencode)
 			return false;
 		}
 	} else {
-		size_t length = Bencode::cast<size_t>(info["length"]);
-		if (length <= 0)
+		size_t length = Bencode::cast<uint64_t>(info["length"]);
+		if (length == 0)
 			return false;
 
 		TorrentFileInfo f = {

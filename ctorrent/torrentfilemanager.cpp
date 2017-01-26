@@ -174,7 +174,7 @@ void TorrentFileManagerImpl::scan_file(const TorrentFile &f)
 {
 	FILE *fp = f.fp;
 	fseek(fp, 0L, SEEK_END);
-	size_t fileLength = ftello64(fp);
+	size_t fileLength = ftello(fp);
 	fseek(fp, 0L, SEEK_SET);
 
 	if (f.info.length > fileLength) {
