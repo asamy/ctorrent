@@ -178,7 +178,7 @@ bool Tracker::udpRequest(const TrackerQuery &r)
 	boost::asio::socket_base::non_blocking_io command(true);
 	socket.io_control(command);
 
-	int len;
+	int len = 0;
 	for (int tries = 0; tries < 10 && len != 16; ++tries) {
 		len = socket.receive_from(asio::buffer(buf, 16), r_endpoint, 0, error);
 		std::this_thread::sleep_for(std::chrono::milliseconds(tries * 30));

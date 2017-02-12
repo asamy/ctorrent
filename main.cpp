@@ -216,7 +216,7 @@ int main(int argc, char *argv[])
 			break;
 		default:
 			errors |= 1 << i;
-			std::cerr << "Failed" << std::endl;
+			std::cerr << "Failed: " << (int)state << std::endl;
 			break;
 		}
 	}
