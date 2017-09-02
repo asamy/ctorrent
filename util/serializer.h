@@ -56,7 +56,7 @@ inline uint64_t readBE64(const uint8_t *addr)
 
 inline void writeBE16(uint8_t *addr, uint16_t value)
 {
-	addr[0] = (uint8_t)value >> 8;
+	addr[0] = value >> 8;
 	addr[1] = (uint8_t)value;
 }
 
